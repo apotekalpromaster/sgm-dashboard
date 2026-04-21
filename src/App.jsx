@@ -214,7 +214,7 @@ export default function App() {
         <div className="topbar">
           <div>
             <div className="topbar-title">{topbarTitle}</div>
-            <div className="topbar-sub">SGM Competition Engine • Alpro Operations</div>
+            <div className="topbar-sub">Powered by SGM Alpro Indonesia, 2026</div>
           </div>
           <div className="topbar-right">
             {period && <span className="period-badge">📅 {period}</span>}

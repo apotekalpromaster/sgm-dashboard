@@ -31,8 +31,8 @@ export default function Sidebar({ page, setPage, uploadedFiles, allTransactions 
       <div className="sidebar-brand">
         <div className="sidebar-brand-icon">💊</div>
         <div>
-          <div className="sidebar-brand-name">SGM Engine</div>
-          <div className="sidebar-brand-sub">ALPRO COMPETITION</div>
+          <div className="sidebar-brand-name">SGM Competition</div>
+          <div className="sidebar-brand-sub">Report System</div>
         </div>
       </div>
 

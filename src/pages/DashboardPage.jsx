@@ -61,23 +61,46 @@ function KpiCard({ color, icon, label, value, sub, progress, target }) {
 // CHARTS
 // ═══════════════════════════════════════════════════════════════
 function StoresChart({ stores = [] }) {
-  const data = (stores || []).slice(0, 8).map((s) => ({
-    name: (s?.name || s?.storeName || '').replace(/ALPRO /i, '').slice(0, 14),
+  // Normalize: v3 uses s.name + s.ns; fallback to legacy s.storeName + s.netSales
+  const data = (stores || []).slice(0, 10).map((s) => ({
+    name:  (s?.name || s?.storeName || '').replace(/APOTEK ALPRO /i, '').replace(/ALPRO /i, '').slice(0, 16),
     sales: Math.round((s?.ns ?? s?.netSales ?? 0) / 1_000_000),
+    ns:    s?.ns    ?? s?.netSales ?? 0,
   }));
-  const colors = ['#0d9488', '#14b8a6', '#5eead4', '#a7f3d0', '#ccfbf1'];
+
+  const colors = ['#0d9488', '#14b8a6', '#2dd4bf', '#5eead4', '#99f6e4', '#a7f3d0', '#ccfbf1'];
+
+  if (data.length === 0) {
+    return (
+      <div className="empty-state" style={{ padding: 40 }}>
+        <div className="empty-icon" style={{ fontSize: 28 }}>📊</div>
+        <p style={{ fontSize: 13 }}>Belum ada data toko untuk kompetisi ini</p>
+      </div>
+    );
+  }
+
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 8, left: -10, bottom: 24 }}>
+        <BarChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 46 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-          <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} angle={-30} textAnchor="end" interval={0} />
-          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-          <Tooltip
-            formatter={(v) => [`Rp ${v}jt`, 'Net Sales']}
-            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            angle={-35}
+            textAnchor="end"
+            interval={0}
           />
-          <Bar dataKey="sales" radius={[4, 4, 0, 0]}>
+          <YAxis
+            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}M` : `${v}jt`}
+          />
+          <Tooltip
+            formatter={(v, name, props) => [`Rp ${props.payload.ns.toLocaleString('id-ID')}`, 'Net Sales']}
+            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+            labelStyle={{ fontWeight: 700, color: '#1e293b' }}
+          />
+          <Bar dataKey="sales" radius={[4, 4, 0, 0]} maxBarSize={40}>
             {data.map((_, i) => <Cell key={i} fill={colors[Math.min(i, colors.length - 1)]} />)}
           </Bar>
         </BarChart>
@@ -87,25 +110,29 @@ function StoresChart({ stores = [] }) {
 }
 
 function AMChart({ topAMs = [] }) {
-  const data = (topAMs || []).slice(0, 6).map((a) => {
-    const amName = a?.name || a?.am || 'Unknown';
-    return { name: amName.split(' ')[0], sales: Math.round((a?.ns ?? a?.netSales ?? 0) / 1_000_000) };
+  const data = (topAMs || []).slice(0, 8).map((a) => {
+    const name = (a?.name || a?.am || 'Unknown');
+    return {
+      name:  name.split(' ').slice(0, 2).join(' '),  // first 2 words
+      sales: Math.round((a?.ns ?? a?.netSales ?? 0) / 1_000_000),
+      ns:    a?.ns ?? a?.netSales ?? 0,
+    };
   });
+
   if (data.length === 0) {
     return (
       <div className="empty-state" style={{ padding: 40 }}>
-        <div className="empty-icon" style={{ fontSize: 32 }}>📊</div>
-        <p>Upload data untuk melihat performa AM</p>
+        <div className="empty-icon" style={{ fontSize: 28 }}>📊</div>
+        <p>Upload data dengan Master AM untuk melihat performa AM</p>
       </div>
     );
   }
+
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, left: 10, bottom: 4 }}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 50, left: 8, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-          <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-          <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#475569' }} width={70} />
           <Tooltip
             formatter={(v) => [`Rp ${v}jt`, 'Net Sales']}
             contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
