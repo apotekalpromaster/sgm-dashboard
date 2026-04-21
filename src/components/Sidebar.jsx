@@ -1,7 +1,7 @@
 /**
  * Sidebar — Rose/Pearl White design with Alpro logo + JJ sticker.
  */
-export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTransactions }) {
+export default function Sidebar({ page, setPage, isAdmin, isOpen, onClose, uploadedFiles, allTransactions }) {
   const hasData = allTransactions.length > 0;
 
   const stepStatus = (s) => {
@@ -26,7 +26,14 @@ export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTran
   ];
 
   return (
-    <aside className="sidebar">
+    <>
+      {/* Overlay — click to close sidebar on mobile */}
+      <div
+        className={`sidebar-overlay ${isOpen ? 'open' : ''}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside className={`sidebar${isOpen ? ' open' : ''}`}>
       {/* ── Brand + Logo ───────────────────────────────────── */}
       <div className="sidebar-brand">
         <div className="sidebar-brand-icon">
@@ -48,7 +55,7 @@ export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTran
         <button
           key={item.id}
           className={`nav-item ${page === item.id ? 'active' : ''}`}
-          onClick={() => setPage(item.id)}
+          onClick={() => { setPage(item.id); onClose?.(); }}
         >
           <span className="nav-icon">{item.icon}</span>
           {item.label}
@@ -128,5 +135,6 @@ export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTran
         </div>
       </div>
     </aside>
+    </>
   );
 }

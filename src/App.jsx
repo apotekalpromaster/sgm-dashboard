@@ -62,6 +62,7 @@ export default function App() {
   const [waReport, setWaReport]         = useState('');
   const [bodReport, setBodReport]       = useState('');
   const [isAdmin, setIsAdmin]           = useState(false);
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
 
   // ── File tracking ───────────────────────────────────────────
   const [uploadedFiles, setUploadedFiles]   = useState([]);
@@ -282,6 +283,8 @@ export default function App() {
         page={page}
         setPage={handleSetPage}
         isAdmin={isAdmin}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
         uploadedFiles={uploadedFiles}
         allTransactions={[...Array(totalRows)]}
       />
@@ -289,9 +292,18 @@ export default function App() {
       <div className="main-area">
         {/* Topbar */}
         <div className="topbar">
-          <div>
-            <div className="topbar-title">{topbarTitle}</div>
-            <div className="topbar-sub">Powered by SGM Alpro Indonesia, 2026</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              className="hamburger-btn"
+              onClick={() => setSidebarOpen((o) => !o)}
+              aria-label="Toggle menu"
+            >
+              {sidebarOpen ? '✕' : '☰'}
+            </button>
+            <div>
+              <div className="topbar-title">{topbarTitle}</div>
+              <div className="topbar-sub">Powered by SGM Alpro Indonesia, 2026</div>
+            </div>
           </div>
           <div className="topbar-right">
             {period && <span className="period-badge">📅 {period}</span>}
@@ -359,6 +371,8 @@ export default function App() {
               onGenerateWA={handleGenerateWA}
               onGenerateBoD={handleGenerateBoD}
               onCopy={handleCopy}
+              processed={result?.processed || {}}
+              period={period}
             />
           )}
         </div>
