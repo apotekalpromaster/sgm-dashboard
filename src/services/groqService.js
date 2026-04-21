@@ -1,11 +1,11 @@
 /**
  * Groq LPU AI Service
- * Model: llama3-70b-8192 (fastest, context-rich)
+ * Model: llama-3.3-70b-versatile (aktif — pengganti llama3-70b-8192 yang sudah decommissioned)
  * Setup: Add VITE_GROQ_API_KEY=gsk_xxx to your .env file
  */
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL    = 'llama3-70b-8192';
+const GROQ_MODEL    = 'llama-3.3-70b-versatile';
 
 const SYSTEM_PROMPT = `Anda adalah analis operasional senior untuk jaringan apotek ritel Indonesia. 
 Tugas Anda adalah mengolah data penjualan kompetisi produk farmasi menjadi dua jenis laporan profesional:
