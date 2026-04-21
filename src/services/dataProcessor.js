@@ -437,17 +437,15 @@ export function computeMetrics(compKey, processed) {
     ? Math.min(((totalQty / targetQty) * 100).toFixed(1), 9999)
     : 0;
 
-  // Pre-calculate strictly formatted chart data arrays as requested (max 10)
-  const chartDataStores = storeLeader.slice(0, 10).map((s) => ({
+  // Pre-calculate strictly formatted chart data arrays as requested
+  const storeChartData = storeLeader.slice(0, 10).map((s) => ({
     name:  (s.name || s.storeName || '').replace(/APOTEK ALPRO /i, '').replace(/ALPRO /i, '').slice(0, 16),
-    sales: Math.round((s.ns || 0) / 1_000_000),
-    rawNs: s.ns || 0,
+    sales: s.ns || 0,
   }));
 
-  const chartDataAMs = amLeader.slice(0, 8).map((a) => ({
+  const amChartData = amLeader.slice(0, 8).map((a) => ({
     name:  (a.name || a.am || 'Unknown').split(' ').slice(0, 2).join(' '),
-    sales: Math.round((a.ns || 0) / 1_000_000),
-    rawNs: a.ns || 0,
+    sales: a.ns || 0,
   }));
 
   return {
@@ -457,8 +455,8 @@ export function computeMetrics(compKey, processed) {
     targetQty,
     pctSales,
     pctQty,
-    chartDataStores,
-    chartDataAMs,
+    storeChartData,
+    amChartData,
     stores:        storeLeader,   // sorted by tier+ns
     topStore:      storeLeader[0] || null,
     topAM:         amLeader[0]    || null,

@@ -60,17 +60,8 @@ function KpiCard({ color, icon, label, value, sub, progress, target }) {
 // ═══════════════════════════════════════════════════════════════
 // CHARTS
 // ═══════════════════════════════════════════════════════════════
-function StoresChart({ stores = [] }) {
-  // Normalize: v3 uses s.name + s.ns; fallback to legacy s.storeName + s.netSales
-  const data = (stores || []).slice(0, 10).map((s) => ({
-    name:  (s?.name || s?.storeName || '').replace(/APOTEK ALPRO /i, '').replace(/ALPRO /i, '').slice(0, 16),
-    sales: Math.round((s?.ns ?? s?.netSales ?? 0) / 1_000_000),
-    ns:    s?.ns    ?? s?.netSales ?? 0,
-  }));
-
-  const colors = ['#0d9488', '#14b8a6', '#2dd4bf', '#5eead4', '#99f6e4', '#a7f3d0', '#ccfbf1'];
-
-  if (data.length === 0) {
+function StoresChart({ data = [] }) {
+  if (!data || data.length === 0) {
     return (
       <div className="empty-state" style={{ padding: 40 }}>
         <div className="empty-icon" style={{ fontSize: 28 }}>📊</div>
@@ -82,7 +73,7 @@ function StoresChart({ stores = [] }) {
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 46 }}>
+        <BarChart data={data} margin={{ top: 12, right: 12, left: 24, bottom: 46 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
           <XAxis
             dataKey="name"
@@ -92,34 +83,24 @@ function StoresChart({ stores = [] }) {
             interval={0}
           />
           <YAxis
+            domain={['auto', 'auto']}
             tick={{ fontSize: 10, fill: '#94a3b8' }}
-            tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}M` : `${v}jt`}
+            tickFormatter={(v) => v >= 1_000_000_000 ? `${(v / 1_000_000_000).toFixed(1)}M` : v >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}jt` : v}
           />
           <Tooltip
-            formatter={(v, name, props) => [`Rp ${props.payload.ns.toLocaleString('id-ID')}`, 'Net Sales']}
-            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
-            labelStyle={{ fontWeight: 700, color: '#1e293b' }}
+            formatter={(v) => [formatRupiah(v), 'Net Sales']}
+            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+            labelStyle={{ fontWeight: 700, color: '#1e293b', marginBottom: 4 }}
           />
-          <Bar dataKey="sales" radius={[4, 4, 0, 0]} maxBarSize={40}>
-            {data.map((_, i) => <Cell key={i} fill={colors[Math.min(i, colors.length - 1)]} />)}
-          </Bar>
+          <Bar dataKey="sales" fill="#0F6E56" fillOpacity={1} radius={[4, 4, 0, 0]} maxBarSize={40} />
         </BarChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-function AMChart({ topAMs = [] }) {
-  const data = (topAMs || []).slice(0, 8).map((a) => {
-    const name = (a?.name || a?.am || 'Unknown');
-    return {
-      name:  name.split(' ').slice(0, 2).join(' '),  // first 2 words
-      sales: Math.round((a?.ns ?? a?.netSales ?? 0) / 1_000_000),
-      ns:    a?.ns ?? a?.netSales ?? 0,
-    };
-  });
-
-  if (data.length === 0) {
+function AMChart({ data = [] }) {
+  if (!data || data.length === 0) {
     return (
       <div className="empty-state" style={{ padding: 40 }}>
         <div className="empty-icon" style={{ fontSize: 28 }}>📊</div>
@@ -131,13 +112,26 @@ function AMChart({ topAMs = [] }) {
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 50, left: 8, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-          <Tooltip
-            formatter={(v) => [`Rp ${v}jt`, 'Net Sales']}
-            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+        <BarChart data={data} margin={{ top: 12, right: 12, left: 24, bottom: 46 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            angle={-35}
+            textAnchor="end"
+            interval={0}
           />
-          <Bar dataKey="sales" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+          <YAxis
+            domain={['auto', 'auto']}
+            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tickFormatter={(v) => v >= 1_000_000_000 ? `${(v / 1_000_000_000).toFixed(1)}M` : v >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}jt` : v}
+          />
+          <Tooltip
+            formatter={(v) => [formatRupiah(v), 'Net Sales']}
+            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+            labelStyle={{ fontWeight: 700, color: '#1e293b', marginBottom: 4 }}
+          />
+          <Bar dataKey="sales" fill="#0F6E56" fillOpacity={1} radius={[4, 4, 0, 0]} maxBarSize={40} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -468,17 +462,17 @@ export default function DashboardPage({
           {/* ── CHARTS ROW ── */}
           <div className="grid-2" style={{ marginBottom: 20 }}>
             <div className="card">
-              <SectionHeader title="📊 Net Sales per Toko" sub="Top 10 toko — nilai dalam juta Rp" />
-              <div className="card-body"><StoresChart data={m.chartDataStores} /></div>
+              <SectionHeader title="📊 Net Sales per Toko" sub="Top 10 toko — nilai dalam juta/milyar Rp" />
+              <div className="card-body"><StoresChart data={m.storeChartData} /></div>
             </div>
             <div className="card">
               <SectionHeader
                 title="👥 Performa per Area Manager"
-                sub="Net Sales (juta Rp) per AM"
+                sub="Top 8 — nilai dalam juta/milyar Rp"
                 count={(D?.amLeader || []).length}
                 onDownloadCSV={handleDlAM}
               />
-              <div className="card-body"><AMChart data={m.chartDataAMs} /></div>
+              <div className="card-body"><AMChart data={m.amChartData} /></div>
             </div>
           </div>
 
