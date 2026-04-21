@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import Sidebar from './components/Sidebar.jsx';
 import { ToastContainer, useToasts } from './components/Toast.jsx';
 import UploadPage from './pages/UploadPage.jsx';
@@ -14,11 +14,16 @@ import {
   computeMetrics,
 } from './services/dataProcessor.js';
 import { generateWAReport, generateBoDReport } from './services/reportGenerators.js';
+import {
+  fetchDashboardData,
+  pushDashboardData,
+  resetDashboardData,
+} from './utils/supabaseClient.js';
 
-// ── Default list produk: fallback jika user tidak upload file List Produk ──
-// Diisi dengan defaults; user BISA override via upload di UI.
-// Format: { [ITEM_CODE]: { itemName, kompetisi } }
-// Kompetisi key HARUS sama persis dengan COMPETITION_CFG keys.
+// ── Password Admin ─────────────────────────────────────────────
+const ADMIN_PASSWORD = 'SGM2026';
+
+// ── Default list produk fallback ───────────────────────────────
 const DEFAULT_LIST_PRODUK = {
   // BLACKMORES
   '100008671': { itemName: 'Blackmores Vitamin C 500mg',   kompetisi: 'BLACKMORES' },
@@ -46,27 +51,28 @@ const DEFAULT_LIST_PRODUK = {
 };
 
 export default function App() {
-  // ── Core state ────────────────────────────────────────────────
-  const [page, setPage]                 = useState('upload');
+  // ── Core state ─────────────────────────────────────────────
+  const [page, setPage]                 = useState('dashboard'); // default halaman = dashboard
   const [activeComp, setActiveComp]     = useState('BLACKMORES');
   const [period, setPeriod]             = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading]       = useState(true); // initial pull state
   const [dragOver, setDragOver]         = useState(false);
   const [reportView, setReportView]     = useState('wa');
   const [waReport, setWaReport]         = useState('');
   const [bodReport, setBodReport]       = useState('');
+  const [isAdmin, setIsAdmin]           = useState(false);
 
-  // ── File tracking ─────────────────────────────────────────────
-  const [uploadedFiles, setUploadedFiles]   = useState([]);  // tx files
+  // ── File tracking ───────────────────────────────────────────
+  const [uploadedFiles, setUploadedFiles]   = useState([]);
   const [listProdukFile, setListProdukFile] = useState(null);
   const [masterAmFile, setMasterAmFile]     = useState(null);
 
-  // ── Processed result: { processed, matched, skipped } ────────
+  // ── Processed result ────────────────────────────────────────
   const [result, setResult] = useState(null);
 
   const { toasts, toast } = useToasts();
 
-  // Derived
   const hasData = result !== null && Object.keys(result.processed).length > 0;
 
   const aggregated = useMemo(() => {
@@ -74,44 +80,92 @@ export default function App() {
     return buildAggregated(result.processed);
   }, [result]);
 
-  // ── Main pipeline runner ──────────────────────────────────────
+  // ── PULL from Supabase on mount ─────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await fetchDashboardData();
+        if (saved) {
+          setResult({ processed: saved.processed, matched: saved.matched, skipped: saved.skipped });
+          if (saved.period) setPeriod(saved.period);
+          if (saved.activeComp) setActiveComp(saved.activeComp);
+          toast('☁️ Data terakhir dimuat dari cloud', 'info');
+        }
+      } catch (e) {
+        // Supabase belum dikonfigurasi / offline — biarkan UI kosong
+        console.warn('[SGM] Supabase fetch skipped:', e.message);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Password-gated navigation ───────────────────────────────
+  const navigateLocked = useCallback((targetPage) => {
+    if (isAdmin) { setPage(targetPage); return; }
+    const pw = window.prompt('🔐 Masukkan Password Admin untuk mengakses fitur ini:');
+    if (pw === ADMIN_PASSWORD) {
+      setIsAdmin(true);
+      setPage(targetPage);
+    } else if (pw !== null) {
+      alert('❌ Password salah. Akses ditolak.');
+    }
+  }, [isAdmin]);
+
+  const handleSetPage = useCallback((p) => {
+    if (p === 'upload' || p === 'report') return navigateLocked(p);
+    setPage(p);
+  }, [navigateLocked]);
+
+  // ── Main pipeline ───────────────────────────────────────────
   const runPipeline = useCallback(async (txFiles, lpFile, amFile) => {
     setIsProcessing(true);
     try {
-      // 1. Parse List Produk Kompetisi (user file or default)
       let listProduk = DEFAULT_LIST_PRODUK;
       if (lpFile) {
         toast('📋 Memuat List Produk Kompetisi...', 'info');
         listProduk = await parseListProduk(lpFile);
-        const nP = Object.keys(listProduk).length;
-        if (!nP) throw new Error('List Produk kosong. Kolom wajib: ITEM CODE, KOMPETISI');
+        if (!Object.keys(listProduk).length) throw new Error('List Produk kosong. Kolom wajib: ITEM CODE, KOMPETISI');
       }
 
-      // 2. Parse Master AM (optional)
       let masterAM = {};
       if (amFile) {
         toast('👥 Memuat Master AM...', 'info');
         masterAM = await parseMasterAM(amFile);
       }
 
-      // 3. Parse all tx files
       toast('⚙️ Memproses file transaksi...', 'info');
-      let allTx = [];
-      let detectedPeriode = '';
+      let allTx = []; let detectedPeriode = '';
       for (const f of txFiles) {
         const { rows, periode } = await parseTxFile(f);
         allTx = allTx.concat(rows);
         if (!detectedPeriode && periode) detectedPeriode = periode;
       }
-
       if (!allTx.length) throw new Error('Tidak ada baris POS yang ditemukan di file transaksi.');
 
-      // 4. Join + aggregate
       const res = processTransactions(allTx, listProduk, masterAM);
+      const firstComp = Object.keys(res.processed)[0] || 'BLACKMORES';
 
       setResult(res);
       if (detectedPeriode) setPeriod(detectedPeriode);
-      setActiveComp(Object.keys(res.processed)[0] || 'BLACKMORES');
+      setActiveComp(firstComp);
+
+      // ── PUSH ke Supabase ──────────────────────────────────
+      try {
+        toast('☁️ Menyimpan ke cloud...', 'info');
+        await pushDashboardData({
+          processed:  res.processed,
+          matched:    res.matched,
+          skipped:    res.skipped,
+          period:     detectedPeriode,
+          activeComp: firstComp,
+          savedAt:    new Date().toISOString(),
+        });
+        toast('✅ Data tersimpan ke cloud!', 'success');
+      } catch (pushErr) {
+        toast(`⚠️ Lokal OK, cloud gagal: ${pushErr.message}`, 'error');
+      }
 
       toast(
         `✅ ${res.matched} transaksi POS cocok · ${res.skipped} non-kompetisi dilewati · ` +
@@ -126,7 +180,7 @@ export default function App() {
     }
   }, [toast]);
 
-  // ── TX file change handler ────────────────────────────────────
+  // ── File handlers ───────────────────────────────────────────
   const handleTxFileChange = useCallback((e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -142,24 +196,35 @@ export default function App() {
     setUploadedFiles((prev) => [...prev, ...files.map((f) => ({ file: f }))]);
   }, [toast]);
 
-  // ── Trigger pipeline ──────────────────────────────────────────
   const handleProcess = useCallback(() => {
     const txFiles = uploadedFiles.map((e) => e.file);
     if (!txFiles.length) { toast('Upload file transaksi terlebih dahulu', 'error'); return; }
     runPipeline(txFiles, listProdukFile, masterAmFile);
   }, [uploadedFiles, listProdukFile, masterAmFile, runPipeline, toast]);
 
-  // ── Reset ─────────────────────────────────────────────────────
+  // ── Local reset ─────────────────────────────────────────────
   const handleReset = useCallback(() => {
     setResult(null);
     setUploadedFiles([]);
     setListProdukFile(null);
     setMasterAmFile(null);
     setPeriod('');
-    toast('Data direset', 'info');
+    toast('Data lokal direset', 'info');
   }, [toast]);
 
-  // ── Report generators ─────────────────────────────────────────
+  // ── Cloud reset (Supabase) ──────────────────────────────────
+  const handleResetCloud = useCallback(async () => {
+    if (!window.confirm('Yakin ingin menghapus data dari cloud? Tindakan ini tidak dapat dibatalkan.')) return;
+    try {
+      await resetDashboardData();
+      handleReset();
+      toast('✅ Database cloud berhasil di-reset!', 'success');
+    } catch (e) {
+      toast(`❌ Gagal reset cloud: ${e.message}`, 'error');
+    }
+  }, [handleReset, toast]);
+
+  // ── Report handlers ─────────────────────────────────────────
   const handleGenerateWA = useCallback(() => {
     if (!result) return;
     const m   = computeMetrics(activeComp, result.processed);
@@ -186,7 +251,7 @@ export default function App() {
       .catch(() => toast('Gagal menyalin', 'error'));
   }, [toast]);
 
-  // ── Topbar title ──────────────────────────────────────────────
+  // ── Topbar title ─────────────────────────────────────────────
   const cfg = COMPETITION_CFG[activeComp] || {};
   const topbarTitle = {
     upload:    '📤 Data Ingestion — Upload Template',
@@ -194,19 +259,31 @@ export default function App() {
     report:    '📋 Report Generator',
   }[page];
 
-  // ── Total tx rows for sidebar counter ─────────────────────────
   const totalRows = useMemo(() => {
     if (!result) return 0;
     return Object.values(result.processed).reduce((s, D) => s + D.storeLeader.length, 0);
   }, [result]);
 
+  if (isLoading) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', flexDirection: 'column', gap: 16, background: '#f8fafc',
+      }}>
+        <div className="spinner dark" style={{ width: 32, height: 32 }} />
+        <div style={{ fontSize: 14, color: '#64748b' }}>Memuat data dari cloud...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
         page={page}
-        setPage={setPage}
+        setPage={handleSetPage}
+        isAdmin={isAdmin}
         uploadedFiles={uploadedFiles}
-        allTransactions={[...Array(totalRows)]} // for counter display
+        allTransactions={[...Array(totalRows)]}
       />
 
       <div className="main-area">
@@ -218,6 +295,12 @@ export default function App() {
           </div>
           <div className="topbar-right">
             {period && <span className="period-badge">📅 {period}</span>}
+            {isAdmin && (
+              <span style={{
+                fontSize: 10, padding: '2px 8px', borderRadius: 99,
+                background: '#dcfce7', color: '#15803d', fontWeight: 700,
+              }}>🔓 Admin</span>
+            )}
             {hasData && (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-outline btn-sm" onClick={handleGenerateWA}>📲 WA Report</button>
@@ -245,6 +328,7 @@ export default function App() {
               onProcess={handleProcess}
               onGoToDashboard={() => setPage('dashboard')}
               onReset={handleReset}
+              onResetCloud={handleResetCloud}
             />
           )}
 
@@ -259,7 +343,7 @@ export default function App() {
               setActiveComp={setActiveComp}
               onGenerateWA={handleGenerateWA}
               onGenerateBoD={handleGenerateBoD}
-              onGoToUpload={() => setPage('upload')}
+              onGoToUpload={() => handleSetPage('upload')}
             />
           )}
 

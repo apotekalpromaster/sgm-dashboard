@@ -1,7 +1,7 @@
 /**
  * App sidebar with navigation items, pipeline step indicator, and live data counters.
  */
-export default function Sidebar({ page, setPage, uploadedFiles, allTransactions }) {
+export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTransactions }) {
   const hasData = allTransactions.length > 0;
 
   const stepStatus = (s) => {
@@ -20,9 +20,9 @@ export default function Sidebar({ page, setPage, uploadedFiles, allTransactions 
   ];
 
   const navItems = [
-    { id: 'upload',    icon: '📤', label: 'Upload Data', badge: uploadedFiles.length || null },
+    { id: 'upload',    icon: '📤', label: 'Upload Data',       badge: uploadedFiles.length || null, locked: true  },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'report',    icon: '📋', label: 'Report Generator' },
+    { id: 'report',    icon: '📋', label: 'Report Generator',                                       locked: true  },
   ];
 
   return (
@@ -46,6 +46,9 @@ export default function Sidebar({ page, setPage, uploadedFiles, allTransactions 
         >
           <span className="nav-icon">{item.icon}</span>
           {item.label}
+          {item.locked && !isAdmin && (
+            <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.5 }}>🔒</span>
+          )}
           {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
         </button>
       ))}

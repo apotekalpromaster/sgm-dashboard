@@ -62,6 +62,7 @@ export default function UploadPage({
   onProcess,
   onGoToDashboard,
   onReset,
+  onResetCloud,
 }) {
   const txFileRef = useRef();
 
@@ -185,9 +186,18 @@ export default function UploadPage({
 
       {/* ── CTA when data exists ── */}
       {hasData && (
-        <div style={{ marginBottom: 20, display: 'flex', gap: 12 }}>
+        <div style={{ marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <button className="btn btn-primary" onClick={onGoToDashboard}>📊 Lihat Dashboard →</button>
-          <button className="btn btn-outline" onClick={onReset}>🗑 Reset Data</button>
+          <button className="btn btn-outline" onClick={onReset}>🗑 Reset Data Lokal</button>
+          {onResetCloud && (
+            <button
+              className="btn btn-outline"
+              style={{ color: '#e11d48', borderColor: '#e11d48' }}
+              onClick={onResetCloud}
+            >
+              ☁️🗑 Reset Database Cloud
+            </button>
+          )}
         </div>
       )}
 
