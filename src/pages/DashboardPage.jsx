@@ -468,8 +468,8 @@ export default function DashboardPage({
           {/* ── CHARTS ROW ── */}
           <div className="grid-2" style={{ marginBottom: 20 }}>
             <div className="card">
-              <SectionHeader title="📊 Net Sales per Toko" sub="Top 8 toko — nilai dalam juta Rp" />
-              <div className="card-body"><StoresChart stores={m.stores} /></div>
+              <SectionHeader title="📊 Net Sales per Toko" sub="Top 10 toko — nilai dalam juta Rp" />
+              <div className="card-body"><StoresChart data={m.chartDataStores} /></div>
             </div>
             <div className="card">
               <SectionHeader
@@ -478,7 +478,7 @@ export default function DashboardPage({
                 count={(D?.amLeader || []).length}
                 onDownloadCSV={handleDlAM}
               />
-              <div className="card-body"><AMChart topAMs={m.topAMs} /></div>
+              <div className="card-body"><AMChart data={m.chartDataAMs} /></div>
             </div>
           </div>
 
