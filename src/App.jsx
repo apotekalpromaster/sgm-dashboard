@@ -254,6 +254,7 @@ export default function App() {
               aggregated={aggregated}
               processed={result?.processed || {}}
               masterAM={[]}
+              period={period}
               activeComp={activeComp}
               setActiveComp={setActiveComp}
               onGenerateWA={handleGenerateWA}

@@ -342,14 +342,27 @@ export function processTransactions(allTx, listProduk, masterAM) {
       return b.ns - a.ns;
     });
 
-    // ── Salesperson map (exclude store-code-like entries) ──
+    // ── Salesperson map (exclude store-code-like entries) — attach per-SP incentive ──
     const spM = {};
     rows.forEach((r) => {
       const sp = r.salesperson;
       if (isStoreCodeSP(sp, storeCodesSet)) return;
-      if (!spM[sp]) spM[sp] = { name: sp, qty: 0, ns: 0, store: r.storeName };
+      if (!spM[sp]) spM[sp] = {
+        name:      sp,
+        qty:       0,
+        ns:        0,
+        store:     r.storeName,
+        storeCode: r.storeCode,
+        am:        r.amName,
+        area:      r.area,
+        incentive: 0,
+      };
       spM[sp].qty += r.qty;
       spM[sp].ns  += r.netSales;
+      // Per-SP incentive for alat-test model
+      if (cfg.incentivePerQty && cfg.incentiveItems?.includes(r.item)) {
+        spM[sp].incentive += r.qty * cfg.incentivePerQty;
+      }
     });
     const spLeader = Object.values(spM).sort((a, b) => b.ns - a.ns);
 
@@ -471,3 +484,106 @@ export function buildAggregated(processed) {
   });
   return aggregated;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// CSV DOWNLOAD UTILITIES
+// ═══════════════════════════════════════════════════════════════
+
+/** Escape a CSV cell value */
+function csvCell(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  return s.includes(',') || s.includes('"') || s.includes('\n')
+    ? `"${s.replace(/"/g, '""')}"`
+    : s;
+}
+
+/** Convert array-of-arrays to UTF-8 CSV Blob and trigger download */
+function downloadCSV(rows2d, filename) {
+  const csv = rows2d.map((r) => r.map(csvCell).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+/**
+ * Download Store Leaderboard CSV for a competition
+ * @param {string} compKey  — e.g. 'BLACKMORES'
+ * @param {object} D        — processed[compKey]
+ * @param {string} periode  — display period label
+ */
+export function downloadStoreCSV(compKey, D, periode = '') {
+  const cfg   = D.cfg || {};
+  const fname = `leaderboard_toko_${compKey.replace(/[^A-Z0-9]/gi, '_')}_${periode.replace(/[^A-Z0-9]/gi, '_') || 'all'}.csv`;
+  const rows  = [['Rank dalam Tier', 'Nama Toko', 'Kode Toko', 'Tier', 'AM', 'Area', 'Qty', 'Min Qty', 'Net Sales (Rp)', 'Status Qualified']];
+
+  // Group by tier
+  const tierGroups = {};
+  D.storeLeader.forEach((s) => {
+    const t = s.category || '—';
+    (tierGroups[t] = tierGroups[t] || []).push(s);
+  });
+
+  Object.entries(tierGroups).forEach(([tier, stores]) => {
+    stores.forEach((s, i) => {
+      const tn   = tierN(s.category);
+      const qMin = cfg.qtyMin?.[tn] || 0;
+      const qual = isQualified(cfg, s.category, s.qty);
+      rows.push([
+        i + 1,
+        s.name  || s.code,
+        s.code,
+        tier,
+        s.am    || '—',
+        s.area  || '—',
+        Math.round(s.qty),
+        qMin || '—',
+        Math.round(s.ns),
+        qMin ? (qual ? 'Qualified' : `Belum (min ${qMin})`) : '—',
+      ]);
+    });
+  });
+
+  downloadCSV(rows, fname);
+}
+
+/**
+ * Download Sales Person Leaderboard CSV
+ */
+export function downloadSPCSV(compKey, D, periode = '') {
+  const fname = `leaderboard_sp_${compKey.replace(/[^A-Z0-9]/gi, '_')}_${periode.replace(/[^A-Z0-9]/gi, '_') || 'all'}.csv`;
+  const rows  = [['Rank', 'Sales Person', 'Toko', 'Kode Toko', 'Area Manager', 'Area', 'Qty', 'Net Sales (Rp)', 'Est. Insentif (Rp)']];
+
+  D.spLeader.forEach((sp, i) => {
+    rows.push([
+      i + 1,
+      sp.name,
+      sp.store       || '—',
+      sp.storeCode   || '—',
+      sp.am          || '—',
+      sp.area        || '—',
+      Math.round(sp.qty),
+      Math.round(sp.ns),
+      Math.round(sp.incentive || 0),
+    ]);
+  });
+
+  downloadCSV(rows, fname);
+}
+
+/**
+ * Download AM Leaderboard CSV
+ */
+export function downloadAMCSV(compKey, D, periode = '') {
+  const fname = `leaderboard_am_${compKey.replace(/[^A-Z0-9]/gi, '_')}_${periode.replace(/[^A-Z0-9]/gi, '_') || 'all'}.csv`;
+  const rows  = [['Rank', 'Area Manager', 'Area', 'Qty', 'Net Sales (Rp)']];
+  D.amLeader.forEach((a, i) => {
+    rows.push([i + 1, a.name, a.area || '—', Math.round(a.qty), Math.round(a.ns)]);
+  });
+  downloadCSV(rows, fname);
+}
+
