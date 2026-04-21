@@ -113,15 +113,15 @@ export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTran
       }}>
         <img
           src="/assets/sticker_jj1.webp"
-          alt="Hai, Alproney! 👋"
-          title="Hai, Alproney! Semangat yasss! 💪"
+          alt="Hai, Alproeans! 👋"
+          title="Hai, Alproeans! Semangat yasss! 💪"
           style={{ width: 90, height: 90, objectFit: 'contain' }}
         />
         <div style={{
           fontSize: 10, color: 'var(--alpro-rose)', fontWeight: 600,
           marginTop: 2, letterSpacing: 0.2,
         }}>
-          Semangat Alproney! 🌸
+          Semangat Alproeans! 🌸
         </div>
         <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>
           Powered by SGM Alpro Indonesia, 2026
