@@ -11,22 +11,20 @@ const SCHEMA_INFO = [
 ];
 
 function FilePickerRow({ icon, label, required, hint, fileName, onChange }) {
-  const ref = useRef();
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
         {label} {required && <span style={{ color: 'var(--alpro-rose)' }}>*</span>}
       </div>
-      <label>
+      <label style={{ cursor: 'pointer', display: 'block' }}>
         <div
           className={`file-btn${fileName ? ' on' : ''}`}
-          onClick={() => ref.current?.click()}
           style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px',
             border: fileName ? '1.5px solid var(--alpro-teal)' : '1.5px dashed var(--surface-3)',
             borderRadius: 10, background: fileName ? 'var(--alpro-teal-muted)' : 'var(--surface-0)',
             cursor: 'pointer', fontSize: 12, color: fileName ? 'var(--alpro-teal)' : 'var(--text-muted)',
-            transition: 'all .15s', minHeight: 38,
+            transition: 'all .15s', minHeight: 46,
           }}
         >
           <span style={{ fontSize: 16 }}>{icon}</span>
@@ -38,7 +36,6 @@ function FilePickerRow({ icon, label, required, hint, fileName, onChange }) {
           </span>
         </div>
         <input
-          ref={ref}
           type="file"
           accept=".xlsx,.xls,.csv"
           style={{ display: 'none' }}

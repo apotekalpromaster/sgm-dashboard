@@ -47,10 +47,10 @@ function KpiCard({ color, icon, label, value, sub, progress, target }) {
   );
 }
 
-function StoresChart({ stores }) {
-  const data = stores.slice(0, 8).map((s) => ({
-    name: s.storeName.replace('ALPRO ', '').slice(0, 14),
-    sales: Math.round(s.netSales / 1_000_000),
+function StoresChart({ stores = [] }) {
+  const data = (stores || []).slice(0, 8).map((s) => ({
+    name: (s?.name || s?.storeName || '').replace(/ALPRO /i, '').slice(0, 14),
+    sales: Math.round((s?.ns ?? s?.netSales ?? 0) / 1_000_000),
   }));
   const colors = ['#0d9488', '#14b8a6', '#5eead4', '#a7f3d0', '#ccfbf1'];
 
@@ -74,11 +74,14 @@ function StoresChart({ stores }) {
   );
 }
 
-function AMChart({ topAMs }) {
-  const data = topAMs.slice(0, 6).map((a) => ({
-    name: a.am.split(' ')[0],
-    sales: Math.round(a.netSales / 1_000_000),
-  }));
+function AMChart({ topAMs = [] }) {
+  const data = (topAMs || []).slice(0, 6).map((a) => {
+    const amName = a?.name || a?.am || 'Unknown';
+    return {
+      name: amName.split(' ')[0],
+      sales: Math.round((a?.ns ?? a?.netSales ?? 0) / 1_000_000),
+    };
+  });
 
   if (data.length === 0) {
     return (
@@ -216,11 +219,14 @@ export default function DashboardPage({
   const [tableFilterCat, setTableFilterCat] = useState('');
 
   const hasData = processed && Object.keys(processed).length > 0 && (processed[activeComp]?.storeLeader?.length > 0);
-  // Use new computeMetrics(compKey, processed) — ported from approved HTML logic
   const m       = hasData ? computeMetrics(activeComp, processed) : null;
   const rules   = competitions[activeComp] || {};
 
-  const allAMs  = useMemo(() => [...new Set(masterAM.map((a) => a.am))].sort(), [masterAM]);
+  // Build local allAMs list safely from aggregated or storeLeader to avoid reliance on empty masterAM
+  const allAMs  = useMemo(() => {
+    if (!processed || !processed[activeComp]) return [];
+    return [...new Set(processed[activeComp].storeLeader.map(s => s.am).filter(Boolean))].sort();
+  }, [processed, activeComp]);
 
   const tableData = useMemo(() => {
     let rows = Object.values(aggregated[activeComp] || {}).map((r) => {
@@ -297,13 +303,13 @@ export default function DashboardPage({
             />
             <KpiCard
               color="amber" icon="🏪" label="Top Store"
-              value={m.topStore?.storeName?.replace('ALPRO ', '') || '—'}
-              sub={m.topStore ? formatRupiah(m.topStore.netSales) : '—'}
+              value={(m.topStore?.name || m.topStore?.storeName || '—').replace(/ALPRO /i, '')}
+              sub={m.topStore ? formatRupiah(m.topStore.ns ?? m.topStore.netSales) : '—'}
             />
             <KpiCard
               color="rose" icon="👤" label="Top Area Manager"
-              value={m.topAM?.am || '—'}
-              sub={m.topAM ? `${m.topAM.stores} toko • ${formatRupiah(m.topAM.netSales)}` : '—'}
+              value={m.topAM?.name || m.topAM?.am || '—'}
+              sub={m.topAM ? `Top AM • ${formatRupiah(m.topAM.ns ?? m.topAM.netSales)}` : '—'}
             />
           </div>
 
