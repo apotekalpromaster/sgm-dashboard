@@ -438,15 +438,21 @@ export function computeMetrics(compKey, processed) {
     : 0;
 
   // Pre-calculate strictly formatted chart data arrays as requested
-  const storeChartData = storeLeader.slice(0, 10).map((s) => ({
-    name:  (s.name || s.storeName || '').replace(/APOTEK ALPRO /i, '').replace(/ALPRO /i, '').slice(0, 16),
-    sales: s.ns || 0,
-  }));
+  const storeChartData = [...storeLeader]
+    .sort((a, b) => (b.ns || 0) - (a.ns || 0)) // Absolute sort by sales
+    .slice(0, 10)
+    .map((s) => ({
+      name:  (s.name || s.storeName || '').replace(/APOTEK ALPRO /i, '').replace(/ALPRO /i, '').slice(0, 16),
+      sales: s.ns || 0,
+    }));
 
-  const amChartData = amLeader.slice(0, 8).map((a) => ({
-    name:  (a.name || a.am || 'Unknown').split(' ').slice(0, 2).join(' '),
-    sales: a.ns || 0,
-  }));
+  const amChartData = [...amLeader]
+    .sort((a, b) => (b.ns || 0) - (a.ns || 0)) // Standardized safe-sort
+    .slice(0, 8)
+    .map((a) => ({
+      name:  (a.name || a.am || 'Unknown').split(' ').slice(0, 2).join(' '),
+      sales: a.ns || 0,
+    }));
 
   return {
     totalSales:    totalNS,
