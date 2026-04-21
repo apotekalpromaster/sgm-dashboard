@@ -1,5 +1,5 @@
 /**
- * App sidebar with navigation items, pipeline step indicator, and live data counters.
+ * Sidebar — Rose/Pearl White design with Alpro logo + JJ sticker.
  */
 export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTransactions }) {
   const hasData = allTransactions.length > 0;
@@ -20,23 +20,29 @@ export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTran
   ];
 
   const navItems = [
-    { id: 'upload',    icon: '📤', label: 'Upload Data',       badge: uploadedFiles.length || null, locked: true  },
+    { id: 'upload',    icon: '📤', label: 'Upload Data',      badge: uploadedFiles.length || null, locked: true  },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'report',    icon: '📋', label: 'Report Generator',                                       locked: true  },
+    { id: 'report',    icon: '📋', label: 'Report Generator',                                      locked: true  },
   ];
 
   return (
     <aside className="sidebar">
-      {/* Brand */}
+      {/* ── Brand + Logo ───────────────────────────────────── */}
       <div className="sidebar-brand">
-        <div className="sidebar-brand-icon">💊</div>
+        <div className="sidebar-brand-icon">
+          <img
+            src="/assets/alpro_logo.png"
+            alt="Alpro Logo"
+            style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }}
+          />
+        </div>
         <div>
           <div className="sidebar-brand-name">SGM Competition</div>
           <div className="sidebar-brand-sub">Report System</div>
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* ── Navigation ─────────────────────────────────────── */}
       <div className="nav-section-label">Menu Utama</div>
       {navItems.map((item) => (
         <button
@@ -47,13 +53,13 @@ export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTran
           <span className="nav-icon">{item.icon}</span>
           {item.label}
           {item.locked && !isAdmin && (
-            <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.5 }}>🔒</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.4 }}>🔒</span>
           )}
           {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
         </button>
       ))}
 
-      {/* Pipeline steps */}
+      {/* ── Pipeline Status ─────────────────────────────────── */}
       <div className="nav-section-label" style={{ marginTop: 16 }}>Pipeline Status</div>
       <div className="step-indicator">
         {steps.map((s, i) => {
@@ -74,16 +80,51 @@ export default function Sidebar({ page, setPage, isAdmin, uploadedFiles, allTran
         })}
       </div>
 
-      {/* Live counters */}
-      <div style={{ marginTop: 'auto', paddingTop: 24 }}>
+      {/* ── Live counters ───────────────────────────────────── */}
+      <div style={{ marginTop: 'auto', paddingTop: 16 }}>
         <div className="nav-section-label">Data Aktif</div>
-        <div style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, marginTop: 4 }}>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>Transaksi POS</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{allTransactions.length.toLocaleString()}</div>
+        <div style={{
+          padding: '8px 12px', background: 'var(--alpro-rose-pale)',
+          borderRadius: 12, marginTop: 4, border: '1px solid var(--border)',
+        }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Transaksi POS</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--alpro-rose)' }}>
+            {allTransactions.length.toLocaleString()}
+          </div>
         </div>
-        <div style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, marginTop: 8 }}>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>File Diproses</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{uploadedFiles.length}</div>
+        <div style={{
+          padding: '8px 12px', background: 'var(--alpro-rose-pale)',
+          borderRadius: 12, marginTop: 8, border: '1px solid var(--border)',
+        }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>File Diproses</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--alpro-rose)' }}>
+            {uploadedFiles.length}
+          </div>
+        </div>
+      </div>
+
+      {/* ── JJ Sticker 1 (Welcoming) ───────────────────────── */}
+      <div style={{
+        textAlign: 'center',
+        paddingTop: 12,
+        paddingBottom: 4,
+        marginTop: 8,
+        borderTop: '1px solid var(--border)',
+      }}>
+        <img
+          src="/assets/sticker_jj1.webp"
+          alt="Hai, Alproney! 👋"
+          title="Hai, Alproney! Semangat yasss! 💪"
+          style={{ width: 90, height: 90, objectFit: 'contain' }}
+        />
+        <div style={{
+          fontSize: 10, color: 'var(--alpro-rose)', fontWeight: 600,
+          marginTop: 2, letterSpacing: 0.2,
+        }}>
+          Semangat Alproney! 🌸
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>
+          Powered by SGM Alpro Indonesia, 2026
         </div>
       </div>
     </aside>

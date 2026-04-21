@@ -61,11 +61,14 @@ function KpiCard({ color, icon, label, value, sub, progress, target }) {
 // CHARTS
 // ═══════════════════════════════════════════════════════════════
 function StoresChart({ data = [] }) {
+  // Rose palette for bars
+  const colors = ['#e11d48', '#fb7185', '#f43f5e', '#fda4af', '#fecdd3', '#ffe4e6', '#fff1f2'];
+
   if (!data || data.length === 0) {
     return (
       <div className="empty-state" style={{ padding: 40 }}>
-        <div className="empty-icon" style={{ fontSize: 28 }}>📊</div>
-        <p style={{ fontSize: 13 }}>Belum ada data toko untuk kompetisi ini</p>
+        <img src="/assets/sticker_jj2.webp" alt="" style={{ width: 80, opacity: 0.8, marginBottom: 8 }} />
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Belum ada data toko untuk kompetisi ini</p>
       </div>
     );
   }
@@ -74,25 +77,27 @@ function StoresChart({ data = [] }) {
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 12, right: 12, left: 24, bottom: 46 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#fff1f2" />
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'Poppins' }}
             angle={-35}
             textAnchor="end"
             interval={0}
           />
           <YAxis
             domain={['auto', 'auto']}
-            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'Poppins' }}
             tickFormatter={(v) => v >= 1_000_000_000 ? `${(v / 1_000_000_000).toFixed(1)}M` : v >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}jt` : v}
           />
           <Tooltip
             formatter={(v) => [formatRupiah(v), 'Net Sales']}
-            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-            labelStyle={{ fontWeight: 700, color: '#1e293b', marginBottom: 4 }}
+            contentStyle={{ borderRadius: 12, border: '1px solid #fecdd3', fontSize: 12, fontFamily: 'Poppins', boxShadow: '0 4px 20px rgba(225,29,72,0.12)' }}
+            labelStyle={{ fontWeight: 700, color: '#9f1239', marginBottom: 4 }}
           />
-          <Bar dataKey="sales" fill="#0F6E56" fillOpacity={1} radius={[4, 4, 0, 0]} maxBarSize={40} />
+          <Bar dataKey="sales" fill="#e11d48" fillOpacity={1} radius={[6, 6, 0, 0]} maxBarSize={40}>
+            {data.map((_, i) => <Cell key={i} fill={colors[Math.min(i, colors.length - 1)]} />)}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -103,7 +108,7 @@ function AMChart({ data = [] }) {
   if (!data || data.length === 0) {
     return (
       <div className="empty-state" style={{ padding: 40 }}>
-        <div className="empty-icon" style={{ fontSize: 28 }}>📊</div>
+        <img src="/assets/sticker_jj2.webp" alt="" style={{ width: 80, opacity: 0.8, marginBottom: 8 }} />
         <p>Upload data dengan Master AM untuk melihat performa AM</p>
       </div>
     );
@@ -113,25 +118,25 @@ function AMChart({ data = [] }) {
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 12, right: 12, left: 24, bottom: 46 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#fff1f2" />
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'Poppins' }}
             angle={-35}
             textAnchor="end"
             interval={0}
           />
           <YAxis
             domain={['auto', 'auto']}
-            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'Poppins' }}
             tickFormatter={(v) => v >= 1_000_000_000 ? `${(v / 1_000_000_000).toFixed(1)}M` : v >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}jt` : v}
           />
           <Tooltip
             formatter={(v) => [formatRupiah(v), 'Net Sales']}
-            contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-            labelStyle={{ fontWeight: 700, color: '#1e293b', marginBottom: 4 }}
+            contentStyle={{ borderRadius: 12, border: '1px solid #fecdd3', fontSize: 12, fontFamily: 'Poppins', boxShadow: '0 4px 20px rgba(225,29,72,0.12)' }}
+            labelStyle={{ fontWeight: 700, color: '#9f1239', marginBottom: 4 }}
           />
-          <Bar dataKey="sales" fill="#0F6E56" fillOpacity={1} radius={[4, 4, 0, 0]} maxBarSize={40} />
+          <Bar dataKey="sales" fill="#e11d48" fillOpacity={1} radius={[6, 6, 0, 0]} maxBarSize={40} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -284,12 +289,21 @@ function SPTable({ rows, showIncentive }) {
 // ═══════════════════════════════════════════════════════════════
 // SECTION HEADER (with CSV button and "Lihat Semua")
 // ═══════════════════════════════════════════════════════════════
-function SectionHeader({ title, sub, count, onShowAll, onDownloadCSV }) {
+function SectionHeader({ title, sub, count, onShowAll, onDownloadCSV, showSticker }) {
   return (
-    <div className="card-header">
-      <div>
-        <div className="card-title">{title}</div>
-        {sub && <div className="card-sub">{sub}</div>}
+    <div className="card-header" style={{ background: showSticker ? 'linear-gradient(135deg, #fff1f2, #fff8f9)' : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {showSticker && (
+          <img
+            src="/assets/sticker_jj3.webp"
+            alt="Achievement"
+            style={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0 }}
+          />
+        )}
+        <div>
+          <div className="card-title">{title}</div>
+          {sub && <div className="card-sub">{sub}</div>}
+        </div>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {onDownloadCSV && (
@@ -494,7 +508,7 @@ export default function DashboardPage({
                   {m.targetQty > 0 && (
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Qty Sold vs Target</div>
-                      <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--alpro-teal)', letterSpacing: -1 }}>{formatNum(m.totalQty)}</div>
+                  <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--alpro-rose)', letterSpacing: -1 }}>{formatNum(m.totalQty)}</div>
                       <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>dari target <strong>{formatNum(m.targetQty)}</strong> pcs</div>
                       <div className="progress-bar-wrap">
                         <div className="progress-bar-track" style={{ height: 10 }}>
@@ -507,7 +521,7 @@ export default function DashboardPage({
                   {m.targetSales > 0 && (
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Net Sales vs Target</div>
-                      <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--alpro-indigo)', letterSpacing: -1 }}>{formatRupiah(m.totalSales)}</div>
+                      <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--alpro-rose-dark)', letterSpacing: -1 }}>{formatRupiah(m.totalSales)}</div>
                       <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>dari target <strong>{formatRupiah(m.targetSales)}</strong></div>
                       <div className="progress-bar-wrap">
                         <div className="progress-bar-track" style={{ height: 10 }}>
@@ -530,6 +544,7 @@ export default function DashboardPage({
               count={D?.storeLeader?.length || 0}
               onShowAll={() => setModal('store')}
               onDownloadCSV={handleDlStore}
+              showSticker
             />
             <div className="card-body" style={{ paddingBottom: 0 }}>
               {/* Filter toolbar */}
@@ -577,6 +592,7 @@ export default function DashboardPage({
               count={spData.length}
               onShowAll={spData.length > 10 ? () => setModal('sp') : null}
               onDownloadCSV={spData.length > 0 ? handleDlSP : null}
+              showSticker
             />
             <div className="table-wrap">
               <SPTable rows={spData.slice(0, 10)} showIncentive={hasIncentive} />
