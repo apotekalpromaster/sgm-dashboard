@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, Cell,
 } from 'recharts';
 import { formatRupiah, formatNum, pct, pctColor, getRankBadgeClass, getRankEmoji } from '../utils/formatters.js';
-import { computeMetrics } from '../services/dataProcessor.js';
+import { computeMetrics, isQualified, TIER_ORDER } from '../services/dataProcessor.js';
 
 function CompTabs({ competitions, activeComp, setActiveComp }) {
   return (
@@ -154,8 +154,8 @@ function LeaderboardTable({ tableData, tableSearch, setTableSearch, tableSort, h
               <th onClick={() => handleSort('am')}>Area Manager</th>
               <th onClick={() => handleSort('region')}>Region</th>
               <th onClick={() => handleSort('qty')} style={{ textAlign: 'right' }}>Qty {tableSort.col === 'qty' ? (tableSort.dir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th style={{ textAlign: 'right' }}>Target</th>
-              <th onClick={() => handleSort('achievement')} style={{ textAlign: 'right' }}>Progress</th>
+              <th style={{ textAlign: 'right' }}>Min Qty</th>
+              <th onClick={() => handleSort('achievement')} style={{ textAlign: 'right' }}>Status</th>
               <th onClick={() => handleSort('netSales')} style={{ textAlign: 'right' }}>Net Sales {tableSort.col === 'netSales' ? (tableSort.dir === 'asc' ? '↑' : '↓') : ''}</th>
             </tr>
           </thead>
@@ -184,14 +184,14 @@ function LeaderboardTable({ tableData, tableSearch, setTableSearch, tableSort, h
                     <td style={{ fontSize: 13 }}>{row.am}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{row.region}</td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatNum(row.qty)}</td>
-                    <td style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 12 }}>{row.target}</td>
-                    <td style={{ textAlign: 'right', minWidth: 120 }}>
-                      <div className="progress-bar-wrap" style={{ justifyContent: 'flex-end' }}>
-                        <div className="progress-bar-track" style={{ width: 60 }}>
-                          <div className={`progress-bar-fill ${achColor}`} style={{ width: `${Math.min(row.achievement, 100)}%` }} />
-                        </div>
-                        <span className={`progress-pct ${achColor}`}>{row.achievement}%</span>
-                      </div>
+                    <td style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: 12 }}>{row.qtyMin || '—'}</td>
+                    <td style={{ textAlign: 'right', minWidth: 100 }}>
+                      {row.qtyMin > 0
+                        ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: row.qualified ? '#dcfce7' : '#ffe4e6', color: row.qualified ? '#15803d' : '#e11d48' }}>
+                            {row.qualified ? '✓ Qualified' : `✗ min ${row.qtyMin}`}
+                          </span>
+                        : '—'
+                      }
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(row.netSales)}</td>
                   </tr>
@@ -206,7 +206,7 @@ function LeaderboardTable({ tableData, tableSearch, setTableSearch, tableSort, h
 }
 
 export default function DashboardPage({
-  competitions, aggregated, masterAM, activeComp, setActiveComp,
+  competitions, aggregated, processed, masterAM, activeComp, setActiveComp,
   onGenerateWA, onGenerateBoD,
   onGoToUpload,
 }) {
@@ -215,18 +215,25 @@ export default function DashboardPage({
   const [tableFilterAM, setTableFilterAM] = useState('');
   const [tableFilterCat, setTableFilterCat] = useState('');
 
-  const hasData = Object.values(aggregated[activeComp] || {}).length > 0;
-  const m       = computeMetrics(activeComp, aggregated, competitions);
-  const rules   = competitions[activeComp];
+  const hasData = processed && Object.keys(processed).length > 0 && (processed[activeComp]?.storeLeader?.length > 0);
+  // Use new computeMetrics(compKey, processed) — ported from approved HTML logic
+  const m       = hasData ? computeMetrics(activeComp, processed) : null;
+  const rules   = competitions[activeComp] || {};
 
   const allAMs  = useMemo(() => [...new Set(masterAM.map((a) => a.am))].sort(), [masterAM]);
 
   const tableData = useMemo(() => {
-    let rows = Object.values(aggregated[activeComp] || {}).map((r) => ({
-      ...r,
-      target: rules?.tiers[r.category] || 0,
-      achievement: pct(r.qty, rules?.tiers[r.category] || 1),
-    }));
+    let rows = Object.values(aggregated[activeComp] || {}).map((r) => {
+      const qualified = isQualified(rules, r.category, r.qty);
+      const tierNum   = rules?.tiers?.[r.category] || 0;
+      const qtyMin    = rules?.qtyMin?.[tierNum] || 0;
+      return {
+        ...r,
+        qtyMin,
+        qualified,
+        achievement: pct(r.qty, qtyMin || 1),
+      };
+    });
 
     if (tableSearch) {
       const q = tableSearch.toLowerCase();
