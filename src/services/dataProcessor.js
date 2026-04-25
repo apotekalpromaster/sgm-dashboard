@@ -414,6 +414,45 @@ export function processTransactions(allTx, listProduk, masterAM) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// DYNAMIC COMPETITION CATALOG — derives tabs from actual data
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Build a dynamic competition catalog from processed data keys.
+ * - Primary source: keys present in `processed` object (what's actually in the data).
+ * - Metadata (label, color, periode, targets) pulled from COMPETITION_CFG when available.
+ * - Unknown competitions get safe neutral defaults — never crashes.
+ *
+ * @param {Object} processed — result.processed from processTransactions
+ * @returns {Object} competitionCatalog — same shape as COMPETITION_CFG, keyed by kompetisi name
+ */
+export function buildDynamicCompetitions(processed) {
+  if (!processed || !Object.keys(processed).length) return COMPETITION_CFG;
+
+  const FALLBACK_COLORS = [
+    '#e11d48', '#0d9488', '#7c3aed', '#d97706', '#185FA5',
+    '#378ADD', '#854F0B', '#16a34a', '#db2777', '#0891b2',
+  ];
+
+  const catalog = {};
+  Object.keys(processed).forEach((key, idx) => {
+    const existing = COMPETITION_CFG[key];
+    catalog[key] = existing
+      ? { ...existing }
+      : {
+          // Safe defaults for any new/unknown competition
+          label:          key,
+          color:          FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+          periode:        '',
+          targetNetSales: 0,
+          targetQty:      null,
+        };
+  });
+  return catalog;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // METRICS HELPER — for Dashboard KPI cards
 // ═══════════════════════════════════════════════════════════════
 

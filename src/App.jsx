@@ -12,6 +12,7 @@ import {
   processTransactions,
   buildAggregated,
   computeMetrics,
+  buildDynamicCompetitions,
 } from './services/dataProcessor.js';
 import { generateWAReport, generateBoDReport } from './services/reportGenerators.js';
 import {
@@ -76,10 +77,26 @@ export default function App() {
 
   const hasData = result !== null && Object.keys(result.processed).length > 0;
 
+  // ── Dynamic competition catalog — derived from actual processed data ──
+  // Always reflects what's really in the upload, not a hardcoded enum.
+  const competitions = useMemo(() => {
+    if (!result?.processed || !Object.keys(result.processed).length) return COMPETITION_CFG;
+    return buildDynamicCompetitions(result.processed);
+  }, [result]);
+
   const aggregated = useMemo(() => {
     if (!result) return {};
     return buildAggregated(result.processed);
   }, [result]);
+
+  // ── Sync activeComp whenever competitions catalog changes ──────
+  // Prevents stale tab selection when user uploads a different List Produk
+  useEffect(() => {
+    const keys = Object.keys(competitions);
+    if (keys.length && !competitions[activeComp]) {
+      setActiveComp(keys[0]);
+    }
+  }, [competitions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── PULL from Supabase on mount ─────────────────────────────
   useEffect(() => {
@@ -346,7 +363,7 @@ export default function App() {
 
           {page === 'dashboard' && (
             <DashboardPage
-              competitions={COMPETITION_CFG}
+              competitions={competitions}
               aggregated={aggregated}
               processed={result?.processed || {}}
               masterAM={[]}
@@ -361,7 +378,7 @@ export default function App() {
 
           {page === 'report' && (
             <ReportPage
-              competitions={COMPETITION_CFG}
+              competitions={competitions}
               activeComp={activeComp}
               setActiveComp={setActiveComp}
               reportView={reportView}
