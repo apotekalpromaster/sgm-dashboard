@@ -51,6 +51,7 @@ export default function UploadPage({
   uploadedFiles,
   listProdukFile,
   masterAmFile,
+  masterCeFile,
   isProcessing,
   hasData,
   dragOver,
@@ -58,6 +59,7 @@ export default function UploadPage({
   onTxFileChange,
   onListProdukChange,
   onMasterAmChange,
+  onMasterCeChange,
   onDrop,
   onProcess,
   onGoToDashboard,
@@ -133,6 +135,20 @@ export default function UploadPage({
           onChange={(e) => {
             const f = e.target.files[0];
             if (f) onMasterAmChange(f);
+            e.target.value = '';
+          }}
+        />
+
+        {/* Master CE picker */}
+        <FilePickerRow
+          icon="🏅"
+          label="Master CE"
+          required={false}
+          hint="Kolom: Store Code · Nama CE · Team (opsional — aktifkan Leaderboard CE)"
+          fileName={masterCeFile?.name}
+          onChange={(e) => {
+            const f = e.target.files[0];
+            if (f) onMasterCeChange(f);
             e.target.value = '';
           }}
         />

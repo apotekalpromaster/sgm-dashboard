@@ -9,10 +9,12 @@ import {
   parseTxFile,
   parseListProduk,
   parseMasterAM,
+  parseMasterCE,
   processTransactions,
   buildAggregated,
   computeMetrics,
   buildDynamicCompetitions,
+  downloadCECSV,
 } from './services/dataProcessor.js';
 import { generateWAReport, generateBoDReport } from './services/reportGenerators.js';
 import {
@@ -69,6 +71,7 @@ export default function App() {
   const [uploadedFiles, setUploadedFiles]   = useState([]);
   const [listProdukFile, setListProdukFile] = useState(null);
   const [masterAmFile, setMasterAmFile]     = useState(null);
+  const [masterCeFile, setMasterCeFile]     = useState(null);
 
   // ── Processed result ────────────────────────────────────────
   const [result, setResult] = useState(null);
@@ -137,7 +140,7 @@ export default function App() {
   }, [navigateLocked]);
 
   // ── Main pipeline ───────────────────────────────────────────
-  const runPipeline = useCallback(async (txFiles, lpFile, amFile) => {
+  const runPipeline = useCallback(async (txFiles, lpFile, amFile, ceFile) => {
     setIsProcessing(true);
     try {
       let listProduk = DEFAULT_LIST_PRODUK;
@@ -153,6 +156,12 @@ export default function App() {
         masterAM = await parseMasterAM(amFile);
       }
 
+      let masterCE = {};
+      if (ceFile) {
+        toast('🏅 Memuat Master CE...', 'info');
+        masterCE = await parseMasterCE(ceFile);
+      }
+
       toast('⚙️ Memproses file transaksi...', 'info');
       let allTx = []; let detectedPeriode = '';
       for (const f of txFiles) {
@@ -162,7 +171,7 @@ export default function App() {
       }
       if (!allTx.length) throw new Error('Tidak ada baris POS yang ditemukan di file transaksi.');
 
-      const res = processTransactions(allTx, listProduk, masterAM);
+      const res = processTransactions(allTx, listProduk, masterAM, masterCE);
       const firstComp = Object.keys(res.processed)[0] || 'BLACKMORES';
 
       setResult(res);
@@ -217,8 +226,8 @@ export default function App() {
   const handleProcess = useCallback(() => {
     const txFiles = uploadedFiles.map((e) => e.file);
     if (!txFiles.length) { toast('Upload file transaksi terlebih dahulu', 'error'); return; }
-    runPipeline(txFiles, listProdukFile, masterAmFile);
-  }, [uploadedFiles, listProdukFile, masterAmFile, runPipeline, toast]);
+    runPipeline(txFiles, listProdukFile, masterAmFile, masterCeFile);
+  }, [uploadedFiles, listProdukFile, masterAmFile, masterCeFile, runPipeline, toast]);
 
   // ── Local reset ─────────────────────────────────────────────
   const handleReset = useCallback(() => {
@@ -226,6 +235,7 @@ export default function App() {
     setUploadedFiles([]);
     setListProdukFile(null);
     setMasterAmFile(null);
+    setMasterCeFile(null);
     setPeriod('');
     toast('Data lokal direset', 'info');
   }, [toast]);
@@ -346,6 +356,7 @@ export default function App() {
               uploadedFiles={uploadedFiles}
               listProdukFile={listProdukFile}
               masterAmFile={masterAmFile}
+              masterCeFile={masterCeFile}
               isProcessing={isProcessing}
               hasData={hasData}
               dragOver={dragOver}
@@ -353,6 +364,7 @@ export default function App() {
               onTxFileChange={handleTxFileChange}
               onListProdukChange={(f) => setListProdukFile(f)}
               onMasterAmChange={(f) => setMasterAmFile(f)}
+              onMasterCeChange={(f) => setMasterCeFile(f)}
               onDrop={handleDrop}
               onProcess={handleProcess}
               onGoToDashboard={() => setPage('dashboard')}

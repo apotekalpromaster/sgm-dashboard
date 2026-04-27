@@ -254,20 +254,54 @@ export async function parseMasterAM(file) {
   return map;
 }
 
+/**
+ * Parse Master CE file.
+ * Returns map: { [STORE_CODE_UPPER]: { ceName, team, outlet, am } }
+ * Required columns: Store Code, Nama CE, Team
+ * Optional: Outlet, Area Manager
+ */
+export async function parseMasterCE(file) {
+  const raw  = await parseFileRaw(file);
+  const hi   = findHdr(raw, 'Store Code', 'Nama CE', 'Team', 'CE');
+  const hdrs = raw[hi].map((h) => String(h || '').trim());
+
+  const iCode   = ci(hdrs, 'Store Code', 'StoreCode', 'Short Code', 'Kode Toko');
+  const iCE     = ci(hdrs, 'Nama CE', 'CE Name', 'CE', 'Nama');
+  const iTeam   = ci(hdrs, 'Team', 'Tim');
+  const iOutlet = ci(hdrs, 'Outlet', 'Store', 'Toko');
+  const iAM     = ci(hdrs, 'Area Manager', 'AM Name', 'AM');
+
+  const map = {};
+  for (let i = hi + 1; i < raw.length; i++) {
+    const r = raw[i];
+    if (!r) continue;
+    const code = N(r[iCode]);
+    if (!code) continue;
+    map[code] = {
+      ceName:  String(r[iCE]     || '').trim(),
+      team:    String(r[iTeam]   || '').trim(),
+      outlet:  String(r[iOutlet] || '').trim(),
+      am:      String(r[iAM]     || '').trim(),
+    };
+  }
+  return map;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN PIPELINE — processTransactions
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Main pipeline. Joins tx rows with listProduk + masterAM, aggregates
- * per competition, and computes all leaderboards + incentives.
+ * Main pipeline. Joins tx rows with listProduk + masterAM + masterCE,
+ * aggregates per competition, and computes all leaderboards + incentives.
  *
  * @param {TxRow[]}   allTx      — output of parseTxFile (multiple files merged)
  * @param {Object}    listProduk — output of parseListProduk
  * @param {Object}    masterAM   — output of parseMasterAM (can be {})
+ * @param {Object}    masterCE   — output of parseMasterCE  (can be {})
  * @returns {ProcessedResult}    — keyed by kompetisi name
  */
-export function processTransactions(allTx, listProduk, masterAM) {
+export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) {
   // Build set of all store codes for SP filtering
   const storeCodesSet = new Set(allTx.map((r) => r.storeCode).filter(Boolean));
   allTx.forEach((r) => {
@@ -396,6 +430,27 @@ export function processTransactions(allTx, listProduk, masterAM) {
       });
     }
 
+    // ── CE (Customer Executive) Leaderboard ──
+    // Join via storeCode → masterCE map. Aggregate Qty & Net Sales per CE.
+    const ceM = {};
+    const hasCE = Object.keys(masterCE).length > 0;
+    if (hasCE) {
+      rows.forEach((r) => {
+        const ceInfo = masterCE[r.storeCode];
+        if (!ceInfo || !ceInfo.ceName) return;
+        const key = ceInfo.ceName.trim().toUpperCase();
+        if (!ceM[key]) ceM[key] = {
+          name:   ceInfo.ceName.trim(),
+          team:   ceInfo.team  || '—',
+          qty:    0,
+          ns:     0,
+        };
+        ceM[key].qty += r.qty;
+        ceM[key].ns  += r.netSales;
+      });
+    }
+    const ceLeaderboard = Object.values(ceM).sort((a, b) => b.ns - a.ns);
+
     processed[k] = {
       cfg,
       totalNS,
@@ -403,6 +458,7 @@ export function processTransactions(allTx, listProduk, masterAM) {
       storeLeader,
       spLeader,
       amLeader,
+      ceLeaderboard,
       itemBreakdown,
       incentiveTotal,
       matchedCount: matched,
@@ -645,3 +701,14 @@ export function downloadAMCSV(compKey, D, periode = '') {
   downloadCSV(rows, fname);
 }
 
+/**
+ * Download CE Leaderboard CSV
+ */
+export function downloadCECSV(compKey, D, periode = '') {
+  const fname = `leaderboard_ce_${compKey.replace(/[^A-Z0-9]/gi, '_')}_${periode.replace(/[^A-Z0-9]/gi, '_') || 'all'}.csv`;
+  const rows  = [['Rank', 'Nama CE', 'Team', 'Qty', 'Net Sales (Rp)']];
+  (D.ceLeaderboard || []).forEach((ce, i) => {
+    rows.push([i + 1, ce.name, ce.team || '—', Math.round(ce.qty), Math.round(ce.ns)]);
+  });
+  downloadCSV(rows, fname);
+}

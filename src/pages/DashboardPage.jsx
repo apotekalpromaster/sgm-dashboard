@@ -8,7 +8,7 @@ import {
 } from '../utils/formatters.js';
 import {
   computeMetrics, isQualified, TIER_ORDER,
-  downloadStoreCSV, downloadSPCSV, downloadAMCSV,
+  downloadStoreCSV, downloadSPCSV, downloadAMCSV, downloadCECSV,
 } from '../services/dataProcessor.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -287,6 +287,56 @@ function SPTable({ rows, showIncentive }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// CE LEADERBOARD TABLE
+// ═══════════════════════════════════════════════════════════════
+function SortTh({ label, col, sortState, onSort, style = {} }) {
+  const active = sortState.col === col;
+  return (
+    <th
+      style={{ cursor: 'pointer', userSelect: 'none', ...style }}
+      onClick={() => onSort(col)}
+    >
+      {label}
+      <span style={{ marginLeft: 4, opacity: active ? 1 : 0.3, fontSize: 10 }}>
+        {active ? (sortState.dir === 'asc' ? '▲' : '▼') : '▼'}
+      </span>
+    </th>
+  );
+}
+
+function CETable({ rows, onSort, sortState }) {
+  return (
+    <table className="data-table" style={{ width: '100%' }}>
+      <thead>
+        <tr>
+          <th>#</th>
+          <SortTh label="Nama CE" col="name" sortState={sortState} onSort={onSort} />
+          <SortTh label="Team"    col="team" sortState={sortState} onSort={onSort} />
+          <SortTh label="Qty"     col="qty"  sortState={sortState} onSort={onSort} style={{ textAlign: 'right' }} />
+          <SortTh label="Net Sales" col="ns" sortState={sortState} onSort={onSort} style={{ textAlign: 'right' }} />
+        </tr>
+      </thead>
+      <tbody>
+        {(rows || []).map((ce, i) => (
+          <tr key={`${ce.name}-${i}`}>
+            <td><span className={`rank-badge ${getRankBadgeClass(i)}`}>{getRankEmoji(i)}</span></td>
+            <td style={{ fontWeight: 600, fontSize: 13 }}>{ce.name}</td>
+            <td>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                background: 'var(--alpro-rose-pale)', color: 'var(--alpro-rose-dark)',
+              }}>{ce.team || '—'}</span>
+            </td>
+            <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatNum(ce.qty)}</td>
+            <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(ce.ns)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SECTION HEADER (with CSV button and "Lihat Semua")
 // ═══════════════════════════════════════════════════════════════
 function SectionHeader({ title, sub, count, onShowAll, onDownloadCSV, showSticker }) {
@@ -333,7 +383,11 @@ export default function DashboardPage({
   const [tableFilterAM,  setTableFilterAM]  = useState('');
   const [tableFilterCat, setTableFilterCat] = useState('');
 
-  // Modal state: null | 'store' | 'sp'
+  // CE leaderboard state
+  const [ceFilterTeam, setCeFilterTeam] = useState('');
+  const [ceSort,       setCeSort]       = useState({ col: 'ns', dir: 'desc' });
+
+  // Modal state: null | 'store' | 'sp' | 'ce'
   const [modal, setModal] = useState(null);
 
   const hasData = !!(
@@ -403,6 +457,27 @@ export default function DashboardPage({
     if (D) downloadAMCSV(activeComp, D, period || '');
   }, [D, activeComp, period]);
 
+  const handleDlCE = useCallback(() => {
+    if (D) downloadCECSV(activeComp, D, period || '');
+  }, [D, activeComp, period]);
+
+  // CE data — filtered + sorted
+  const ceRawData = D?.ceLeaderboard || [];
+  const allTeams  = useMemo(() => [...new Set(ceRawData.map((c) => c.team).filter(Boolean))].sort(), [ceRawData]);
+  const ceData    = useMemo(() => {
+    let rows = ceFilterTeam ? ceRawData.filter((c) => c.team === ceFilterTeam) : [...ceRawData];
+    rows.sort((a, b) => {
+      const va = a[ceSort.col]; const vb = b[ceSort.col];
+      if (typeof va === 'string') return ceSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return ceSort.dir === 'asc' ? va - vb : vb - va;
+    });
+    return rows;
+  }, [ceRawData, ceFilterTeam, ceSort]);
+
+  const handleCeSort = useCallback((col) => {
+    setCeSort((prev) => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
+  }, []);
+
   // ── Render ──
   return (
     <div>
@@ -422,6 +497,15 @@ export default function DashboardPage({
         <FullListModal title={`Semua Sales Person — ${rules.label || activeComp}`} onClose={() => setModal(null)}>
           <div style={{ padding: 4 }}>
             <SPTable rows={spData} showIncentive={hasIncentive} />
+          </div>
+        </FullListModal>
+      )}
+
+      {/* Modal Lihat Semua CE */}
+      {modal === 'ce' && (
+        <FullListModal title={`Semua CE — ${rules.label || activeComp}`} onClose={() => setModal(null)}>
+          <div style={{ padding: 4 }}>
+            <CETable rows={ceData} onSort={handleCeSort} sortState={ceSort} />
           </div>
         </FullListModal>
       )}
@@ -583,6 +667,47 @@ export default function DashboardPage({
               )}
             </div>
           </div>
+
+          {/* ── CE LEADERBOARD ── */}
+          {ceRawData.length > 0 && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <SectionHeader
+                title="🏅 Leaderboard CE"
+                sub={`${ceRawData.length} CE aktif · urut Net Sales · join via Store Code`}
+                count={ceData.length}
+                onShowAll={ceData.length > 10 ? () => setModal('ce') : null}
+                onDownloadCSV={ceRawData.length > 0 ? handleDlCE : null}
+                showSticker
+              />
+              {/* Team filter */}
+              {allTeams.length > 0 && (
+                <div className="card-body" style={{ paddingBottom: 0, paddingTop: 10 }}>
+                  <div className="toolbar">
+                    <select
+                      className="filter-select"
+                      value={ceFilterTeam}
+                      onChange={(e) => setCeFilterTeam(e.target.value)}
+                    >
+                      <option value="">Semua Team</option>
+                      {allTeams.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    {ceFilterTeam && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => setCeFilterTeam('')}>✕ Reset</button>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="table-wrap">
+                <CETable rows={ceData.slice(0, 10)} onSort={handleCeSort} sortState={ceSort} />
+                {ceData.length > 10 && (
+                  <div style={{ textAlign: 'center', padding: '10px 0 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                    +{ceData.length - 10} CE lainnya —{' '}
+                    <button className="btn btn-ghost btn-sm" onClick={() => setModal('ce')}>Lihat Semua</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── SALES PERSON HIGHLIGHT ── */}
           <div className="card" style={{ marginBottom: 20 }}>
