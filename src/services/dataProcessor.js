@@ -516,22 +516,35 @@ export function buildDynamicCompetitions(processed) {
 export function computeMetrics(compKey, processed) {
   const D = processed[compKey];
   if (!D) return null;
+  return computeMetricsFromD(D);
+}
 
-  const { cfg, totalNS, totalQty, storeLeader, amLeader, spLeader, itemBreakdown, incentiveTotal } = D;
+/**
+ * Compute KPI metrics directly from a (possibly filtered) competition data object.
+ * Used by DashboardPage so all KPI cards, charts, progress bars, topStore, topAM
+ * always reflect the active global filter (AM / Team).
+ *
+ * @param {CompetitionData} D — result of aggregateOneCompetition() or processed[k]
+ * @returns {MetricsObject}
+ */
+export function computeMetricsFromD(D) {
+  if (!D) return null;
+
+  const { cfg = {}, totalNS, totalQty, storeLeader = [], amLeader = [], spLeader = [], itemBreakdown = [], incentiveTotal = 0 } = D;
 
   const targetSales = cfg.targetNetSales || 0;
   const targetQty   = cfg.targetQty      || 0;
 
   const pctSales = targetSales > 0
-    ? Math.min(((totalNS / targetSales) * 100).toFixed(1), 9999)
+    ? +((totalNS  / targetSales) * 100).toFixed(1)
     : 0;
   const pctQty = targetQty > 0
-    ? Math.min(((totalQty / targetQty) * 100).toFixed(1), 9999)
+    ? +((totalQty / targetQty)   * 100).toFixed(1)
     : 0;
 
-  // Pre-calculate strictly formatted chart data arrays as requested
+  // Chart data — built from current D (respects filter)
   const storeChartData = [...storeLeader]
-    .sort((a, b) => (b.ns || 0) - (a.ns || 0)) // Absolute sort by sales
+    .sort((a, b) => (b.ns || 0) - (a.ns || 0))
     .slice(0, 10)
     .map((s) => ({
       name:  (s.name || s.storeName || '').replace(/APOTEK ALPRO /i, '').replace(/ALPRO /i, '').slice(0, 16),
@@ -539,7 +552,7 @@ export function computeMetrics(compKey, processed) {
     }));
 
   const amChartData = [...amLeader]
-    .sort((a, b) => (b.ns || 0) - (a.ns || 0)) // Standardized safe-sort
+    .sort((a, b) => (b.ns || 0) - (a.ns || 0))
     .slice(0, 8)
     .map((a) => ({
       name:  (a.name || a.am || 'Unknown').split(' ').slice(0, 2).join(' '),
@@ -555,7 +568,7 @@ export function computeMetrics(compKey, processed) {
     pctQty,
     storeChartData,
     amChartData,
-    stores:        storeLeader,   // sorted by tier+ns
+    stores:        storeLeader,
     topStore:      storeLeader[0] || null,
     topAM:         amLeader[0]    || null,
     topAMs:        amLeader,

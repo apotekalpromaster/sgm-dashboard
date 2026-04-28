@@ -7,7 +7,7 @@ import {
   formatRupiah, formatNum, pct, pctColor, getRankBadgeClass, getRankEmoji,
 } from '../utils/formatters.js';
 import {
-  computeMetrics, isQualified, TIER_ORDER,
+  computeMetrics, computeMetricsFromD, isQualified, TIER_ORDER,
   downloadStoreCSV, downloadSPCSV, downloadAMCSV, downloadCECSV,
   aggregateOneCompetition,
 } from '../services/dataProcessor.js';
@@ -395,31 +395,30 @@ export default function DashboardPage({
   const [modal, setModal] = useState(null);
 
   // ── GLOBAL FILTER RE-AGGREGATION ─────────────────────────────────────
-  // When filterAM or filterTeam changes, re-aggregate from raw enrichedRows
-  // so KPI cards, charts, and all leaderboards update instantly.
+  // Filter enrichedRows first, then re-aggregate from scratch.
+  // filteredD is the SINGLE SOURCE OF TRUTH for every UI element.
   const filteredD = useMemo(() => {
-    // No enrichedRows = use pre-computed processed (e.g. from Supabase with no raw rows)
+    // No raw rows (e.g. Supabase pull without enrichedRows) — fall back to pre-computed
     if (!enrichedRows.length) return processed[activeComp] || null;
 
-    // Filter raw rows
+    // TAHAP 1: Filter raw rows by competition + global filters
     let rows = enrichedRows.filter((r) => r.kompetisi === activeComp);
     if (filterAM)   rows = rows.filter((r) => r.amName   === filterAM);
     if (filterTeam) rows = rows.filter((r) => r.teamName === filterTeam);
 
     if (!rows.length) return null;
 
-    const cfg = processed[activeComp]?.cfg || {};
+    // TAHAP 2: Re-aggregate from zero — all leaderboards + chart data
+    const cfg           = processed[activeComp]?.cfg || {};
     const storeCodesSet = new Set(rows.map((r) => r.storeCode).filter(Boolean));
-    return aggregateOneCompetition(rows, {}, storeCodesSet, cfg);
-    // Note: pass empty masterCE ({}) because CE data via storeCode isn't in enrichedRows;
-    // CE leaderboard falls back to processed[activeComp].ceLeaderboard when filter is active.
+    // Pass processed CE map so CE leaderboard also works under filter
+    const masterCEMap   = processed[activeComp]?._masterCE || {};
+    const agg           = aggregateOneCompetition(rows, masterCEMap, storeCodesSet, cfg);
+    return agg;
   }, [enrichedRows, activeComp, filterAM, filterTeam, processed]);
 
-  // Use filteredD for all leaderboard data; fall back to processed for CE (storeCode join)
+  // D = single source of truth for all UI (filtered or unfiltered)
   const D = filteredD || processed?.[activeComp] || null;
-
-  // When filter is active and CE needs storeCode join, use processed CE as approximation
-  const ceSource = (filterAM || filterTeam) ? (filteredD || D) : D;
 
   const hasData = !!(
     processed &&
@@ -427,8 +426,18 @@ export default function DashboardPage({
     (processed[activeComp]?.storeLeader?.length > 0)
   );
 
-  const m     = D ? { ...computeMetrics(activeComp, processed), totalNS: D.totalNS, totalQty: D.totalQty, storeCount: D.storeLeader?.length || 0, qualifiedCount: (D.storeLeader || []).filter((s) => { const tn = (competitions[activeComp]?.tiers || {})[s.category] || 0; const qMin = (competitions[activeComp]?.qtyMin || {})[tn] || 0; return !qMin || s.qty >= qMin; }).length } : null;
   const rules = competitions[activeComp] || {};
+
+  // TAHAP 3: Compute all KPI metrics from D (filter-aware)
+  // computeMetricsFromD reads totalNS/totalQty/storeLeader/amLeader directly from D
+  // so every number on screen reflects the active filter.
+  const m = useMemo(() => {
+    if (!D) return null;
+    // Merge cfg from competitions catalog (has targets/periode) with D
+    const cfg = competitions[activeComp] || {};
+    const DwithCfg = { ...D, cfg: { ...cfg, ...(D.cfg || {}) } };
+    return computeMetricsFromD(DwithCfg);
+  }, [D, activeComp, competitions]);
 
   // All AMs from storeLeader for filter dropdown
   const allAMs = useMemo(() => {
@@ -471,7 +480,7 @@ export default function DashboardPage({
   }, []);
 
   // SP data: top-10 preview, full list in modal
-  const spData     = D?.spLeader || [];
+  const spData       = D?.spLeader || [];
   const hasIncentive = !!(m?.incentiveTotal > 0 || spData.some((sp) => sp.incentive > 0));
 
   // ── CSV Handlers ──
@@ -625,6 +634,24 @@ export default function DashboardPage({
             <p>Upload file template transaksi dan List Produk Kompetisi untuk melihat dashboard.</p>
             <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={onGoToUpload}>
               📤 Upload Sekarang
+            </button>
+          </div>
+        </div>
+      ) : !m ? (
+        /* Filter aktif tapi tidak ada transaksi yang cocok */
+        <div className="card">
+          <div className="empty-state">
+            <div className="empty-icon">🔍</div>
+            <h3>Tidak ada data untuk filter ini</h3>
+            <p>
+              Tidak ditemukan transaksi untuk{' '}
+              {filterAM && <><strong>{filterAM}</strong>{filterTeam ? ' · ' : ''}</>}
+              {filterTeam && <>Team <strong>{filterTeam}</strong></>}
+              {' '}pada kompetisi <strong>{activeComp}</strong>.
+            </p>
+            <button className="btn btn-outline" style={{ marginTop: 16 }}
+              onClick={() => { setFilterAM(''); setFilterTeam(''); }}>
+              ✕ Reset Filter
             </button>
           </div>
         </div>
