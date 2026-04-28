@@ -74,13 +74,14 @@ export default function App() {
   const [masterAmFile, setMasterAmFile]     = useState(null);
   const [masterCeFile, setMasterCeFile]     = useState(null);
 
-  // ── Processed result ────────────────────────────────────────
+  // ── Processed result ────────────────────────────────────────────
   const [result, setResult] = useState(null);
 
-  // ── Global Filter state (persists across comp tab changes) ──
+  // ── Global Filter state (persists across comp tab changes) ────────
   const [filterAM,   setFilterAM]   = useState('');
   const [filterTeam, setFilterTeam] = useState('');
 
+  const { toasts, toast } = useToasts();
 
   const hasData = result !== null && Object.keys(result.processed).length > 0;
 
