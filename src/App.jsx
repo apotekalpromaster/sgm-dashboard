@@ -11,6 +11,7 @@ import {
   parseMasterAM,
   parseMasterCE,
   processTransactions,
+  aggregateOneCompetition,
   buildAggregated,
   computeMetrics,
   buildDynamicCompetitions,
@@ -76,7 +77,10 @@ export default function App() {
   // ── Processed result ────────────────────────────────────────
   const [result, setResult] = useState(null);
 
-  const { toasts, toast } = useToasts();
+  // ── Global Filter state (persists across comp tab changes) ──
+  const [filterAM,   setFilterAM]   = useState('');
+  const [filterTeam, setFilterTeam] = useState('');
+
 
   const hasData = result !== null && Object.keys(result.processed).length > 0;
 
@@ -107,7 +111,14 @@ export default function App() {
       try {
         const saved = await fetchDashboardData();
         if (saved) {
-          setResult({ processed: saved.processed, matched: saved.matched, skipped: saved.skipped });
+          setResult({
+            processed:     saved.processed,
+            enrichedRows:  saved.enrichedRows  || [],
+            availableAMs:  saved.availableAMs  || [],
+            availableTeams: saved.availableTeams || [],
+            matched: saved.matched,
+            skipped: saved.skipped,
+          });
           if (saved.period) setPeriod(saved.period);
           if (saved.activeComp) setActiveComp(saved.activeComp);
           toast('☁️ Data terakhir dimuat dari cloud', 'info');
@@ -177,12 +188,18 @@ export default function App() {
       setResult(res);
       if (detectedPeriode) setPeriod(detectedPeriode);
       setActiveComp(firstComp);
+      // Reset filters when new data is loaded
+      setFilterAM('');
+      setFilterTeam('');
 
       // ── PUSH ke Supabase ──────────────────────────────────
       try {
         toast('☁️ Menyimpan ke cloud...', 'info');
         await pushDashboardData({
-          processed:  res.processed,
+          processed:    res.processed,
+          enrichedRows: res.enrichedRows,
+          availableAMs: res.availableAMs,
+          availableTeams: res.availableTeams,
           matched:    res.matched,
           skipped:    res.skipped,
           period:     detectedPeriode,
@@ -378,6 +395,13 @@ export default function App() {
               competitions={competitions}
               aggregated={aggregated}
               processed={result?.processed || {}}
+              enrichedRows={result?.enrichedRows || []}
+              availableAMs={result?.availableAMs || []}
+              availableTeams={result?.availableTeams || []}
+              filterAM={filterAM}
+              setFilterAM={setFilterAM}
+              filterTeam={filterTeam}
+              setFilterTeam={setFilterTeam}
               masterAM={[]}
               period={period}
               activeComp={activeComp}

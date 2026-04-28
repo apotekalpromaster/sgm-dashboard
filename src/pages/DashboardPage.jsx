@@ -9,6 +9,7 @@ import {
 import {
   computeMetrics, isQualified, TIER_ORDER,
   downloadStoreCSV, downloadSPCSV, downloadAMCSV, downloadCECSV,
+  aggregateOneCompetition,
 } from '../services/dataProcessor.js';
 
 // ═══════════════════════════════════════════════════════════════
@@ -375,7 +376,10 @@ function SectionHeader({ title, sub, count, onShowAll, onDownloadCSV, showSticke
 // MAIN DASHBOARD PAGE
 // ═══════════════════════════════════════════════════════════════
 export default function DashboardPage({
-  competitions, aggregated, processed, masterAM, activeComp, setActiveComp,
+  competitions, aggregated, processed,
+  enrichedRows = [], availableAMs = [], availableTeams = [],
+  filterAM, setFilterAM, filterTeam, setFilterTeam,
+  masterAM, activeComp, setActiveComp,
   onGenerateWA, onGenerateBoD, onGoToUpload, period,
 }) {
   const [tableSearch,    setTableSearch]    = useState('');
@@ -390,15 +394,41 @@ export default function DashboardPage({
   // Modal state: null | 'store' | 'sp' | 'ce'
   const [modal, setModal] = useState(null);
 
+  // ── GLOBAL FILTER RE-AGGREGATION ─────────────────────────────────────
+  // When filterAM or filterTeam changes, re-aggregate from raw enrichedRows
+  // so KPI cards, charts, and all leaderboards update instantly.
+  const filteredD = useMemo(() => {
+    // No enrichedRows = use pre-computed processed (e.g. from Supabase with no raw rows)
+    if (!enrichedRows.length) return processed[activeComp] || null;
+
+    // Filter raw rows
+    let rows = enrichedRows.filter((r) => r.kompetisi === activeComp);
+    if (filterAM)   rows = rows.filter((r) => r.amName   === filterAM);
+    if (filterTeam) rows = rows.filter((r) => r.teamName === filterTeam);
+
+    if (!rows.length) return null;
+
+    const cfg = processed[activeComp]?.cfg || {};
+    const storeCodesSet = new Set(rows.map((r) => r.storeCode).filter(Boolean));
+    return aggregateOneCompetition(rows, {}, storeCodesSet, cfg);
+    // Note: pass empty masterCE ({}) because CE data via storeCode isn't in enrichedRows;
+    // CE leaderboard falls back to processed[activeComp].ceLeaderboard when filter is active.
+  }, [enrichedRows, activeComp, filterAM, filterTeam, processed]);
+
+  // Use filteredD for all leaderboard data; fall back to processed for CE (storeCode join)
+  const D = filteredD || processed?.[activeComp] || null;
+
+  // When filter is active and CE needs storeCode join, use processed CE as approximation
+  const ceSource = (filterAM || filterTeam) ? (filteredD || D) : D;
+
   const hasData = !!(
     processed &&
     Object.keys(processed).length > 0 &&
     (processed[activeComp]?.storeLeader?.length > 0)
   );
 
-  const m     = hasData ? computeMetrics(activeComp, processed) : null;
+  const m     = D ? { ...computeMetrics(activeComp, processed), totalNS: D.totalNS, totalQty: D.totalQty, storeCount: D.storeLeader?.length || 0, qualifiedCount: (D.storeLeader || []).filter((s) => { const tn = (competitions[activeComp]?.tiers || {})[s.category] || 0; const qMin = (competitions[activeComp]?.qtyMin || {})[tn] || 0; return !qMin || s.qty >= qMin; }).length } : null;
   const rules = competitions[activeComp] || {};
-  const D     = processed?.[activeComp] || null;
 
   // All AMs from storeLeader for filter dropdown
   const allAMs = useMemo(() => {
@@ -482,6 +512,83 @@ export default function DashboardPage({
   return (
     <div>
       <CompTabs competitions={competitions} activeComp={activeComp} setActiveComp={setActiveComp} />
+
+      {/* ── GLOBAL FILTER BAR ── */}
+      {hasData && (availableAMs.length > 0 || availableTeams.length > 0) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          padding: '10px 16px',
+          background: 'linear-gradient(135deg, #fff1f2 0%, #fdf2f8 100%)',
+          borderBottom: '1.5px solid #fce7f3',
+          borderRadius: '0 0 12px 12px',
+          marginBottom: 4,
+        }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700, color: 'var(--alpro-rose)',
+            display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+          }}>
+            🔎 Filter Global
+          </span>
+
+          {/* AM Filter */}
+          {availableAMs.length > 0 && (
+            <select
+              value={filterAM}
+              onChange={(e) => setFilterAM(e.target.value)}
+              style={{
+                flex: 1, minWidth: 160, maxWidth: 260,
+                padding: '7px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+                border: filterAM ? '2px solid var(--alpro-rose)' : '1.5px solid #e5e7eb',
+                background: filterAM ? '#fff1f2' : '#fff', color: filterAM ? 'var(--alpro-rose)' : '#374151',
+                cursor: 'pointer', outline: 'none',
+              }}
+            >
+              <option value="">🏢 Semua Area Manager</option>
+              {availableAMs.map((am) => <option key={am} value={am}>{am}</option>)}
+            </select>
+          )}
+
+          {/* Team Filter */}
+          {availableTeams.length > 0 && (
+            <select
+              value={filterTeam}
+              onChange={(e) => setFilterTeam(e.target.value)}
+              style={{
+                flex: 1, minWidth: 140, maxWidth: 220,
+                padding: '7px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+                border: filterTeam ? '2px solid #7c3aed' : '1.5px solid #e5e7eb',
+                background: filterTeam ? '#f5f3ff' : '#fff', color: filterTeam ? '#7c3aed' : '#374151',
+                cursor: 'pointer', outline: 'none',
+              }}
+            >
+              <option value="">👥 Semua Team</option>
+              {availableTeams.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+
+          {/* Active filter badge + reset */}
+          {(filterAM || filterTeam) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99,
+                background: '#fee2e2', color: '#dc2626',
+              }}>
+                🔴 Filter Aktif: {[filterAM, filterTeam].filter(Boolean).join(' · ')}
+              </span>
+              <button
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8,
+                  background: '#fff', border: '1.5px solid #e5e7eb', cursor: 'pointer',
+                  color: '#6b7280',
+                }}
+                onClick={() => { setFilterAM(''); setFilterTeam(''); }}
+              >
+                ✕ Reset
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal Lihat Semua Toko */}
       {modal === 'store' && (

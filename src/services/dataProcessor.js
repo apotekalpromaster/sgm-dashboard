@@ -288,37 +288,143 @@ export async function parseMasterCE(file) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// AGGREGATE ENGINE — pure, filter-safe, reusable
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Aggregate one competition's enriched rows into leaderboard data.
+ * Pure function — no side-effects. Safe to call from useMemo with filtered rows.
+ *
+ * @param {EnrichedRow[]} rows       — enriched rows for ONE competition (possibly pre-filtered)
+ * @param {Object}        masterCE   — { [STORE_CODE]: { ceName, team } }
+ * @param {Set}           storeCodesSet — set of store codes (for SP dedup)
+ * @param {Object}        cfg        — COMPETITION_CFG[kompetisiKey]
+ */
+export function aggregateOneCompetition(rows, masterCE, storeCodesSet, cfg = {}) {
+  const sc = storeCodesSet instanceof Set ? storeCodesSet
+    : new Set(rows.map((r) => r.storeCode).filter(Boolean));
+
+  const totalNS  = rows.reduce((s, r) => s + r.netSales, 0);
+  const totalQty = rows.reduce((s, r) => s + r.qty, 0);
+
+  // Store leaderboard
+  const stM = {};
+  rows.forEach((r) => {
+    if (!stM[r.storeCode]) stM[r.storeCode] = {
+      code: r.storeCode, name: r.storeName, category: r.category,
+      am: r.amName, area: r.area, qty: 0, ns: 0,
+    };
+    stM[r.storeCode].qty += r.qty;
+    stM[r.storeCode].ns  += r.netSales;
+  });
+  const storeLeader = Object.values(stM).sort((a, b) => {
+    const ta = TIER_ORDER.indexOf(a.category) < 0 ? 99 : TIER_ORDER.indexOf(a.category);
+    const tb = TIER_ORDER.indexOf(b.category) < 0 ? 99 : TIER_ORDER.indexOf(b.category);
+    return ta !== tb ? ta - tb : b.ns - a.ns;
+  });
+
+  // Sales Person leaderboard
+  const spM = {};
+  rows.forEach((r) => {
+    const sp = r.salesperson;
+    if (isStoreCodeSP(sp, sc)) return;
+    if (!spM[sp]) spM[sp] = {
+      name: sp, qty: 0, ns: 0,
+      store: r.storeName, storeCode: r.storeCode,
+      am: r.amName, area: r.area, incentive: 0,
+    };
+    spM[sp].qty += r.qty;
+    spM[sp].ns  += r.netSales;
+    if (cfg.incentivePerQty && cfg.incentiveItems?.includes(r.item))
+      spM[sp].incentive += r.qty * cfg.incentivePerQty;
+  });
+  const spLeader = Object.values(spM).sort((a, b) => b.ns - a.ns);
+
+  // Area Manager leaderboard
+  const amM = {};
+  rows.forEach((r) => {
+    if (!r.amName) return;
+    if (!amM[r.amName]) amM[r.amName] = { name: r.amName, area: r.area, qty: 0, ns: 0 };
+    amM[r.amName].qty += r.qty;
+    amM[r.amName].ns  += r.netSales;
+  });
+  const amLeader = Object.values(amM).sort((a, b) => b.ns - a.ns);
+
+  // CE leaderboard (join via storeCode)
+  const ceM = {};
+  if (masterCE && Object.keys(masterCE).length) {
+    rows.forEach((r) => {
+      const ceInfo = masterCE[r.storeCode];
+      if (!ceInfo?.ceName) return;
+      const key = ceInfo.ceName.trim().toUpperCase();
+      if (!ceM[key]) ceM[key] = { name: ceInfo.ceName.trim(), team: ceInfo.team || '—', qty: 0, ns: 0 };
+      ceM[key].qty += r.qty;
+      ceM[key].ns  += r.netSales;
+    });
+  }
+  const ceLeaderboard = Object.values(ceM).sort((a, b) => b.ns - a.ns);
+
+  // Item breakdown
+  const itM = {};
+  rows.forEach((r) => {
+    if (!itM[r.item]) itM[r.item] = { item: r.item, desc: r.itemName || r.itemDesc, qty: 0, ns: 0 };
+    itM[r.item].qty += r.qty;
+    itM[r.item].ns  += r.netSales;
+  });
+  const itemBreakdown = Object.values(itM).sort((a, b) => b.qty - a.qty);
+
+  // Incentive total
+  let incentiveTotal = 0;
+  if (cfg.incentivePerQty && cfg.incentiveItems) {
+    rows.forEach((r) => {
+      if (cfg.incentiveItems.includes(r.item)) incentiveTotal += r.qty * cfg.incentivePerQty;
+    });
+  }
+
+  return { cfg, totalNS, totalQty, storeLeader, spLeader, amLeader, ceLeaderboard, itemBreakdown, incentiveTotal };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN PIPELINE — processTransactions
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Main pipeline. Joins tx rows with listProduk + masterAM + masterCE,
- * aggregates per competition, and computes all leaderboards + incentives.
+ * Main pipeline. Enriches raw tx rows with amName & teamName, then
+ * aggregates per competition for the initial (unfiltered) payload.
  *
- * @param {TxRow[]}   allTx      — output of parseTxFile (multiple files merged)
- * @param {Object}    listProduk — output of parseListProduk
- * @param {Object}    masterAM   — output of parseMasterAM (can be {})
- * @param {Object}    masterCE   — output of parseMasterCE  (can be {})
- * @returns {ProcessedResult}    — keyed by kompetisi name
+ * @returns {{ processed, enrichedRows, availableAMs, availableTeams, matched, skipped }}
+ *   - processed:     initial aggregation (unfiltered) — keyed by kompetisi
+ *   - enrichedRows:  tagged rows — feed to DashboardPage for client-side re-aggregation
+ *   - availableAMs:  sorted unique AM names for filter dropdown
+ *   - availableTeams: sorted unique team names for filter dropdown
  */
 export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) {
-  // Build set of all store codes for SP filtering
+  // Store-code set for SP dedup
   const storeCodesSet = new Set(allTx.map((r) => r.storeCode).filter(Boolean));
   allTx.forEach((r) => {
     const parts = r.storeRaw.split('-');
     if (parts.length >= 2) storeCodesSet.add(parts[parts.length - 1].trim().toUpperCase());
   });
 
-  // ── JOIN: enrich each tx row ──────────────────────────────────
+  // Build ceName.toUpperCase() → team reverse lookup (SP name join for teamName tag)
+  const spTeamMap = {};
+  Object.values(masterCE).forEach(({ ceName, team }) => {
+    if (ceName) spTeamMap[ceName.trim().toUpperCase()] = team || '';
+  });
+
+  // JOIN: enrich + tag each row
   let matched = 0, skipped = 0;
-  const enriched = [];
+  const enrichedRows = [];
 
   allTx.forEach((r) => {
     const produk = listProduk[r.item];
     if (!produk) { skipped++; return; }
 
-    const master = masterAM[r.storeCode] || {};
-    enriched.push({
+    const master   = masterAM[r.storeCode] || {};
+    const spKey    = (r.salesperson || '').trim().toUpperCase();
+    const teamName = spTeamMap[spKey] || '';
+
+    enrichedRows.push({
       ...r,
       storeName:  master.storeName || r.storeRaw,
       category:   master.category  || '',
@@ -326,148 +432,39 @@ export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) 
       area:       master.area      || '',
       kompetisi:  produk.kompetisi,
       itemName:   produk.itemName  || r.itemDesc,
+      teamName,   // ← global filter tag: derived from SP→CE→Team join
     });
     matched++;
   });
 
-  if (!enriched.length) {
+  if (!enrichedRows.length) {
     throw new Error(
       `0 transaksi cocok kompetisi.\nBaris POS: ${allTx.length} · Produk terdaftar: ${Object.keys(listProduk).length}\n` +
       `Periksa apakah ITEM CODE di List Produk sesuai dengan kolom Item di template transaksi.`
     );
   }
 
-  // ── GROUP BY KOMPETISI ────────────────────────────────────────
+  // Available filter options — derived from actual data, not static config
+  const availableAMs   = [...new Set(enrichedRows.map((r) => r.amName).filter(Boolean))].sort();
+  const availableTeams = [...new Set(enrichedRows.map((r) => r.teamName).filter(Boolean))].sort();
+
+  // Initial aggregation (no filter) — group by kompetisi
   const byK = {};
-  enriched.forEach((r) => { (byK[r.kompetisi] = byK[r.kompetisi] || []).push(r); });
+  enrichedRows.forEach((r) => { (byK[r.kompetisi] = byK[r.kompetisi] || []).push(r); });
 
-  // ── AGGREGATE PER KOMPETISI ───────────────────────────────────
   const processed = {};
-
   Object.entries(byK).forEach(([k, rows]) => {
     const cfg = COMPETITION_CFG[k] || {};
-
-    const totalNS  = rows.reduce((s, r) => s + r.netSales, 0);
-    const totalQty = rows.reduce((s, r) => s + r.qty, 0);
-
-    // ── Store map ──
-    const stM = {};
-    rows.forEach((r) => {
-      if (!stM[r.storeCode]) {
-        stM[r.storeCode] = {
-          code:     r.storeCode,
-          name:     r.storeName,
-          category: r.category,
-          am:       r.amName,
-          area:     r.area,
-          qty:      0,
-          ns:       0,
-        };
-      }
-      stM[r.storeCode].qty += r.qty;
-      stM[r.storeCode].ns  += r.netSales;
-    });
-
-    // Sort: by TIER_ORDER first, then by ns desc within tier
-    const storeLeader = Object.values(stM).sort((a, b) => {
-      const ta = TIER_ORDER.indexOf(a.category) < 0 ? 99 : TIER_ORDER.indexOf(a.category);
-      const tb = TIER_ORDER.indexOf(b.category) < 0 ? 99 : TIER_ORDER.indexOf(b.category);
-      if (ta !== tb) return ta - tb;
-      return b.ns - a.ns;
-    });
-
-    // ── Salesperson map (exclude store-code-like entries) — attach per-SP incentive ──
-    const spM = {};
-    rows.forEach((r) => {
-      const sp = r.salesperson;
-      if (isStoreCodeSP(sp, storeCodesSet)) return;
-      if (!spM[sp]) spM[sp] = {
-        name:      sp,
-        qty:       0,
-        ns:        0,
-        store:     r.storeName,
-        storeCode: r.storeCode,
-        am:        r.amName,
-        area:      r.area,
-        incentive: 0,
-      };
-      spM[sp].qty += r.qty;
-      spM[sp].ns  += r.netSales;
-      // Per-SP incentive for alat-test model
-      if (cfg.incentivePerQty && cfg.incentiveItems?.includes(r.item)) {
-        spM[sp].incentive += r.qty * cfg.incentivePerQty;
-      }
-    });
-    const spLeader = Object.values(spM).sort((a, b) => b.ns - a.ns);
-
-    // ── Area Manager map ──
-    const amM = {};
-    rows.forEach((r) => {
-      if (!r.amName) return;
-      if (!amM[r.amName]) amM[r.amName] = { name: r.amName, area: r.area, qty: 0, ns: 0 };
-      amM[r.amName].qty += r.qty;
-      amM[r.amName].ns  += r.netSales;
-    });
-    const amLeader = Object.values(amM).sort((a, b) => b.ns - a.ns);
-
-    // ── Item breakdown ──
-    const itM = {};
-    rows.forEach((r) => {
-      if (!itM[r.item]) itM[r.item] = { item: r.item, desc: r.itemName || r.itemDesc, qty: 0, ns: 0 };
-      itM[r.item].qty += r.qty;
-      itM[r.item].ns  += r.netSales;
-    });
-    const itemBreakdown = Object.values(itM).sort((a, b) => b.qty - a.qty);
-
-    // ── Incentive calculation ──
-    // Model 1: incentivePerQty × qty for specific items (FamilyDr Alat Test, Omron Alat Test)
-    let incentiveTotal = 0;
-    if (cfg.incentivePerQty && cfg.incentiveItems) {
-      rows.forEach((r) => {
-        if (cfg.incentiveItems.includes(r.item)) {
-          incentiveTotal += r.qty * cfg.incentivePerQty;
-        }
-      });
-    }
-
-    // ── CE (Customer Executive) Leaderboard ──
-    // Join via storeCode → masterCE map. Aggregate Qty & Net Sales per CE.
-    const ceM = {};
-    const hasCE = Object.keys(masterCE).length > 0;
-    if (hasCE) {
-      rows.forEach((r) => {
-        const ceInfo = masterCE[r.storeCode];
-        if (!ceInfo || !ceInfo.ceName) return;
-        const key = ceInfo.ceName.trim().toUpperCase();
-        if (!ceM[key]) ceM[key] = {
-          name:   ceInfo.ceName.trim(),
-          team:   ceInfo.team  || '—',
-          qty:    0,
-          ns:     0,
-        };
-        ceM[key].qty += r.qty;
-        ceM[key].ns  += r.netSales;
-      });
-    }
-    const ceLeaderboard = Object.values(ceM).sort((a, b) => b.ns - a.ns);
-
     processed[k] = {
-      cfg,
-      totalNS,
-      totalQty,
-      storeLeader,
-      spLeader,
-      amLeader,
-      ceLeaderboard,
-      itemBreakdown,
-      incentiveTotal,
+      ...aggregateOneCompetition(rows, masterCE, storeCodesSet, cfg),
       matchedCount: matched,
       skippedCount: skipped,
     };
   });
 
-  return { processed, matched, skipped };
+  return { processed, enrichedRows, availableAMs, availableTeams, matched, skipped };
 }
+
 
 // ═══════════════════════════════════════════════════════════════
 // DYNAMIC COMPETITION CATALOG — derives tabs from actual data
