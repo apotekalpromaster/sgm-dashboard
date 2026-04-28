@@ -350,18 +350,16 @@ export function aggregateOneCompetition(rows, masterCE, storeCodesSet, cfg = {})
   });
   const amLeader = Object.values(amM).sort((a, b) => b.ns - a.ns);
 
-  // CE leaderboard (join via storeCode)
+  // CE leaderboard — reads ceName & team directly from enrichedRows
+  // (tagged at ingest time, no external masterCE map needed)
   const ceM = {};
-  if (masterCE && Object.keys(masterCE).length) {
-    rows.forEach((r) => {
-      const ceInfo = masterCE[r.storeCode];
-      if (!ceInfo?.ceName) return;
-      const key = ceInfo.ceName.trim().toUpperCase();
-      if (!ceM[key]) ceM[key] = { name: ceInfo.ceName.trim(), team: ceInfo.team || '—', qty: 0, ns: 0 };
-      ceM[key].qty += r.qty;
-      ceM[key].ns  += r.netSales;
-    });
-  }
+  rows.forEach((r) => {
+    if (!r.ceName) return;
+    const key = r.ceName.trim().toUpperCase();
+    if (!ceM[key]) ceM[key] = { name: r.ceName.trim(), team: r.team || '—', qty: 0, ns: 0 };
+    ceM[key].qty += r.qty;
+    ceM[key].ns  += r.netSales;
+  });
   const ceLeaderboard = Object.values(ceM).sort((a, b) => b.ns - a.ns);
 
   // Item breakdown
@@ -406,13 +404,14 @@ export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) 
     if (parts.length >= 2) storeCodesSet.add(parts[parts.length - 1].trim().toUpperCase());
   });
 
-  // Build ceName.toUpperCase() → team reverse lookup (SP name join for teamName tag)
-  const spTeamMap = {};
+  // Build SP name → { ceName, team } lookup from masterCE
+  // Join key: salesperson name (TX) matches ceName (Master CE) — trim + uppercase
+  const spCEMap = {};
   Object.values(masterCE).forEach(({ ceName, team }) => {
-    if (ceName) spTeamMap[ceName.trim().toUpperCase()] = team || '';
+    if (ceName) spCEMap[ceName.trim().toUpperCase()] = { ceName: ceName.trim(), team: team || '' };
   });
 
-  // JOIN: enrich + tag each row
+  // JOIN: enrich + tag each row with amName, teamName, ceName, team
   let matched = 0, skipped = 0;
   const enrichedRows = [];
 
@@ -420,9 +419,9 @@ export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) 
     const produk = listProduk[r.item];
     if (!produk) { skipped++; return; }
 
-    const master   = masterAM[r.storeCode] || {};
-    const spKey    = (r.salesperson || '').trim().toUpperCase();
-    const teamName = spTeamMap[spKey] || '';
+    const master  = masterAM[r.storeCode] || {};
+    const spKey   = (r.salesperson || '').trim().toUpperCase();
+    const ceEntry = spCEMap[spKey] || {};
 
     enrichedRows.push({
       ...r,
@@ -432,7 +431,9 @@ export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) 
       area:       master.area      || '',
       kompetisi:  produk.kompetisi,
       itemName:   produk.itemName  || r.itemDesc,
-      teamName,   // ← global filter tag: derived from SP→CE→Team join
+      teamName:   ceEntry.team  || '',   // ← global Team filter tag
+      ceName:     ceEntry.ceName || '',  // ← CE leaderboard grouping key
+      team:       ceEntry.team  || '',   // ← CE team label
     });
     matched++;
   });

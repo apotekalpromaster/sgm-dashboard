@@ -144,7 +144,7 @@ export default function UploadPage({
           icon="🏅"
           label="Master CE"
           required={false}
-          hint="Kolom: Store Code · Nama CE · Team (opsional — aktifkan Leaderboard CE)"
+          hint="Kolom: Nama CE · Team (join via Sales Person ↔ Nama CE — aktifkan Leaderboard CE & Filter Team)"
           fileName={masterCeFile?.name}
           onChange={(e) => {
             const f = e.target.files[0];

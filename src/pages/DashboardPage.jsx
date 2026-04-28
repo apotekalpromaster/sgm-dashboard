@@ -387,9 +387,8 @@ export default function DashboardPage({
   const [tableFilterAM,  setTableFilterAM]  = useState('');
   const [tableFilterCat, setTableFilterCat] = useState('');
 
-  // CE leaderboard state
-  const [ceFilterTeam, setCeFilterTeam] = useState('');
-  const [ceSort,       setCeSort]       = useState({ col: 'ns', dir: 'desc' });
+  // CE leaderboard state — local sort only (Team filter is now global)
+  const [ceSort, setCeSort] = useState({ col: 'ns', dir: 'desc' });
 
   // Modal state: null | 'store' | 'sp' | 'ce'
   const [modal, setModal] = useState(null);
@@ -409,12 +408,11 @@ export default function DashboardPage({
     if (!rows.length) return null;
 
     // TAHAP 2: Re-aggregate from zero — all leaderboards + chart data
+    // ceName & team are now tagged on each enrichedRow, so aggregateOneCompetition
+    // builds ceLeaderboard from r.ceName directly — no external masterCE map needed.
     const cfg           = processed[activeComp]?.cfg || {};
     const storeCodesSet = new Set(rows.map((r) => r.storeCode).filter(Boolean));
-    // Pass processed CE map so CE leaderboard also works under filter
-    const masterCEMap   = processed[activeComp]?._masterCE || {};
-    const agg           = aggregateOneCompetition(rows, masterCEMap, storeCodesSet, cfg);
-    return agg;
+    return aggregateOneCompetition(rows, {}, storeCodesSet, cfg);
   }, [enrichedRows, activeComp, filterAM, filterTeam, processed]);
 
   // D = single source of truth for all UI (filtered or unfiltered)
@@ -500,18 +498,17 @@ export default function DashboardPage({
     if (D) downloadCECSV(activeComp, D, period || '');
   }, [D, activeComp, period]);
 
-  // CE data — filtered + sorted
+  // CE data — sorted only (Team filtering done globally by filterTeam)
   const ceRawData = D?.ceLeaderboard || [];
-  const allTeams  = useMemo(() => [...new Set(ceRawData.map((c) => c.team).filter(Boolean))].sort(), [ceRawData]);
   const ceData    = useMemo(() => {
-    let rows = ceFilterTeam ? ceRawData.filter((c) => c.team === ceFilterTeam) : [...ceRawData];
+    const rows = [...ceRawData];
     rows.sort((a, b) => {
       const va = a[ceSort.col]; const vb = b[ceSort.col];
       if (typeof va === 'string') return ceSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       return ceSort.dir === 'asc' ? va - vb : vb - va;
     });
     return rows;
-  }, [ceRawData, ceFilterTeam, ceSort]);
+  }, [ceRawData, ceSort]);
 
   const handleCeSort = useCallback((col) => {
     setCeSort((prev) => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'desc' });
@@ -807,30 +804,12 @@ export default function DashboardPage({
             <div className="card" style={{ marginBottom: 20 }}>
               <SectionHeader
                 title="🏅 Leaderboard CE"
-                sub={`${ceRawData.length} CE aktif · urut Net Sales · join via Store Code`}
+                sub={`${ceRawData.length} CE aktif · urut Net Sales${filterTeam ? ` · Team: ${filterTeam}` : ''}`}
                 count={ceData.length}
                 onShowAll={ceData.length > 10 ? () => setModal('ce') : null}
                 onDownloadCSV={ceRawData.length > 0 ? handleDlCE : null}
                 showSticker
               />
-              {/* Team filter */}
-              {allTeams.length > 0 && (
-                <div className="card-body" style={{ paddingBottom: 0, paddingTop: 10 }}>
-                  <div className="toolbar">
-                    <select
-                      className="filter-select"
-                      value={ceFilterTeam}
-                      onChange={(e) => setCeFilterTeam(e.target.value)}
-                    >
-                      <option value="">Semua Team</option>
-                      {allTeams.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    {ceFilterTeam && (
-                      <button className="btn btn-ghost btn-sm" onClick={() => setCeFilterTeam('')}>✕ Reset</button>
-                    )}
-                  </div>
-                </div>
-              )}
               <div className="table-wrap">
                 <CETable rows={ceData.slice(0, 10)} onSort={handleCeSort} sortState={ceSort} />
                 {ceData.length > 10 && (
