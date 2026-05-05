@@ -196,8 +196,9 @@ export async function parseTxFile(file) {
 
 /**
  * Parse List Produk Kompetisi file.
- * Returns map: { [ITEM_CODE]: { itemName, kompetisi } }
+ * Returns map: { [ITEM_CODE]: { itemName, kompetisi, group } }
  * Required columns: ITEM CODE, KOMPETISI
+ * Optional column:  GROUP DASHBOARD (col C) — used for nested tabs Level 1
  */
 export async function parseListProduk(file) {
   const raw = await parseFileRaw(file);
@@ -207,6 +208,8 @@ export async function parseListProduk(file) {
   const iC = ci(hdrs, 'ITEM CODE', 'Item Code', 'ITEMCODE', 'code');
   const iN = ci(hdrs, 'ITEM NAME', 'Item Name', 'DESKRIPSI', 'Description', 'Name');
   const iK = ci(hdrs, 'KOMPETISI', 'Kompetisi', 'Competition');
+  // GROUP DASHBOARD — optional col, gracefully missing
+  const iG = ci(hdrs, 'GROUP DASHBOARD', 'GROUP', 'Group Dashboard', 'Group');
 
   const map = {};
   for (let i = hi + 1; i < raw.length; i++) {
@@ -217,9 +220,29 @@ export async function parseListProduk(file) {
     map[code] = {
       itemName:  String(r[iN] || '').trim(),
       kompetisi: N(r[iK]),
+      group:     iG >= 0 ? String(r[iG] || '').trim().toUpperCase() || 'UMUM' : 'UMUM',
     };
   }
   return map;
+}
+
+/**
+ * Build a 2-level hierarchy from listProduk for nested tabs.
+ * Returns { [GROUP]: [kompetisiKey, ...] } — ordered by first appearance.
+ * Falls back gracefully when group is missing (all items in 'UMUM').
+ *
+ * @param {Object} listProduk — result of parseListProduk
+ * @returns {Object} groupedCompetitions
+ */
+export function buildGroupedCompetitions(listProduk) {
+  const grouped = {};
+  Object.values(listProduk).forEach(({ kompetisi, group }) => {
+    if (!kompetisi) return;
+    const g = group || 'UMUM';
+    if (!grouped[g]) grouped[g] = [];
+    if (!grouped[g].includes(kompetisi)) grouped[g].push(kompetisi);
+  });
+  return Object.keys(grouped).length ? grouped : null;
 }
 
 /**

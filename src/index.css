@@ -1020,3 +1020,234 @@ code { font-family: 'Courier New', monospace; }
   /* KPI values: slightly smaller */
   .kpi-value { font-size: 18px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME: DARK
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme='dark'] {
+  --alpro-rose:         #fb7185;
+  --alpro-rose-light:   #fda4af;
+  --alpro-rose-pale:    rgba(251, 113, 133, 0.10);
+  --alpro-rose-muted:   rgba(251, 113, 133, 0.25);
+  --alpro-rose-dark:    #fecdd3;
+
+  --alpro-teal:         #2dd4bf;
+  --alpro-teal-light:   #5eead4;
+  --alpro-teal-dark:    #99f6e4;
+  --alpro-teal-muted:   rgba(45, 212, 191, 0.15);
+  --alpro-indigo:       #a78bfa;
+  --alpro-indigo-light: #c4b5fd;
+  --alpro-amber:        #fbbf24;
+
+  --surface-0:          #1e1e2e;
+  --surface-1:          #181825;
+  --surface-2:          #2a2a3e;
+  --surface-3:          rgba(251, 113, 133, 0.20);
+
+  --text-primary:       #e2e8f0;
+  --text-secondary:     #94a3b8;
+  --text-muted:         #64748b;
+  --border:             rgba(251, 113, 133, 0.15);
+
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-md:  0 4px 20px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.30);
+  --shadow-lg:  0 10px 40px rgba(0,0,0,0.60), 0 4px 16px rgba(0,0,0,0.30);
+}
+
+[data-theme='dark'] body { background: var(--surface-1); }
+
+[data-theme='dark'] .sidebar {
+  background: #16162a;
+  border-right-color: rgba(251,113,133,0.12);
+}
+
+[data-theme='dark'] .topbar {
+  background: #1e1e2e;
+  border-bottom-color: rgba(251,113,133,0.12);
+}
+
+[data-theme='dark'] .data-table thead th {
+  background: #16162a;
+  color: #94a3b8;
+}
+
+[data-theme='dark'] .data-table tbody tr:hover { background: #2a2a3e; }
+
+[data-theme='dark'] .tab-strip { background: #16162a; }
+
+[data-theme='dark'] .tab-btn.active {
+  background: #2a2a3e;
+  color: #e2e8f0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME: ORANGE GRADIENT (Energetic)
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme='orange'] {
+  --alpro-rose:         #f97316;
+  --alpro-rose-light:   #fb923c;
+  --alpro-rose-pale:    #fff7ed;
+  --alpro-rose-muted:   #fed7aa;
+  --alpro-rose-dark:    #c2410c;
+
+  --alpro-teal:         #eab308;
+  --alpro-teal-light:   #facc15;
+  --alpro-teal-dark:    #a16207;
+  --alpro-teal-muted:   #fef9c3;
+  --alpro-indigo:       #7c3aed;
+  --alpro-indigo-light: #8b5cf6;
+  --alpro-amber:        #f97316;
+
+  --surface-0:          #ffffff;
+  --surface-1:          #fff7ed;
+  --surface-2:          #fed7aa;
+  --surface-3:          #fdba74;
+
+  --text-primary:       #1c1917;
+  --text-secondary:     #57534e;
+  --text-muted:         #a8a29e;
+  --border:             #fed7aa;
+
+  --shadow-sm:  0 1px 4px rgba(249,115,22,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:  0 4px 20px rgba(249,115,22,0.14), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-lg:  0 10px 40px rgba(249,115,22,0.18), 0 4px 16px rgba(0,0,0,0.04);
+}
+
+[data-theme='orange'] .comp-tab.active {
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  border-color: #f97316;
+  box-shadow: 0 4px 16px rgba(249,115,22,0.30);
+}
+
+[data-theme='orange'] .nav-item.active {
+  background: linear-gradient(135deg, #fff7ed, #fed7aa);
+  color: #c2410c;
+}
+
+[data-theme='orange'] .nav-item:hover {
+  background: #fff7ed;
+  color: #f97316;
+}
+
+[data-theme='orange'] .kpi-card.teal::before   { background: linear-gradient(90deg, #eab308, #facc15); }
+[data-theme='orange'] .kpi-card.rose::before    { background: linear-gradient(90deg, #c2410c, #f97316); }
+[data-theme='orange'] .kpi-card.amber::before   { background: linear-gradient(90deg, #b45309, #f59e0b); }
+[data-theme='orange'] .kpi-card.indigo::before  { background: linear-gradient(90deg, #6d28d9, #7c3aed); }
+
+/* ═══════════════════════════════════════════════════════════════
+   NESTED TABS (Group + Sub)
+   ═══════════════════════════════════════════════════════════════ */
+.nested-tabs-wrap {
+  margin-bottom: 20px;
+}
+
+/* Level 1 — Group tabs */
+.group-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  flex-wrap: wrap;
+}
+
+.group-tab {
+  padding: 8px 18px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.group-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.5);
+}
+
+.group-tab.active {
+  background: var(--alpro-rose);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(225,29,72,0.22);
+}
+
+[data-theme='dark'] .group-tab.active {
+  background: var(--alpro-rose);
+  color: #1e1e2e;
+}
+
+[data-theme='orange'] .group-tab.active {
+  background: var(--alpro-rose);
+  color: #fff;
+}
+
+/* Level 2 — Competition sub-tabs */
+.sub-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 8px 0;
+  background: var(--surface-2);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.sub-tab {
+  padding: 7px 16px;
+  border: 1.5px solid transparent;
+  background: var(--surface-0);
+  cursor: pointer;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  margin-bottom: -1px;
+}
+
+.sub-tab:hover {
+  border-color: var(--alpro-rose-muted);
+  color: var(--alpro-rose);
+}
+
+.sub-tab.active {
+  border-color: var(--alpro-rose);
+  border-bottom-color: var(--surface-0);
+  color: var(--alpro-rose);
+  background: var(--surface-0);
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME TOGGLE BUTTON
+   ═══════════════════════════════════════════════════════════════ */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.theme-toggle:hover {
+  border-color: var(--alpro-rose);
+  color: var(--alpro-rose);
+  background: var(--alpro-rose-pale);
+}

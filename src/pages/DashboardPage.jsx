@@ -13,20 +13,72 @@ import {
 } from '../services/dataProcessor.js';
 
 // ═══════════════════════════════════════════════════════════════
-// COMPETITION TABS
+// NESTED COMPETITION TABS (Group L1 + Competition L2)
+// Falls back to flat CompTabs when groupedCompetitions is null.
 // ═══════════════════════════════════════════════════════════════
-function CompTabs({ competitions, activeComp, setActiveComp }) {
+function NestedTabs({
+  groupedCompetitions, activeGroup, setActiveGroup,
+  competitions, activeComp, setActiveComp,
+}) {
+  // No grouping data — render original flat comp-tabs
+  if (!groupedCompetitions) {
+    return (
+      <div className="comp-tabs">
+        {Object.entries(competitions).map(([key, comp]) => (
+          <button
+            key={key}
+            className={`comp-tab ${activeComp === key ? 'active' : ''}`}
+            onClick={() => setActiveComp(key)}
+          >
+            {comp.label || key}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  // Grouped: L1 = groups, L2 = competitions within active group
+  const groups      = Object.keys(groupedCompetitions);
+  const subComps    = groupedCompetitions[activeGroup] || [];
+
+  const handleGroupClick = (g) => {
+    setActiveGroup(g);
+    // Auto-select first competition in the new group
+    const first = (groupedCompetitions[g] || [])[0];
+    if (first) setActiveComp(first);
+  };
+
   return (
-    <div className="comp-tabs">
-      {Object.entries(competitions).map(([key, comp]) => (
-        <button
-          key={key}
-          className={`comp-tab ${activeComp === key ? 'active' : ''}`}
-          onClick={() => setActiveComp(key)}
-        >
-          {comp.label || key}
-        </button>
-      ))}
+    <div className="nested-tabs-wrap">
+      {/* Level 1 — Group tabs */}
+      <div className="group-tabs">
+        {groups.map((g) => (
+          <button
+            key={g}
+            className={`group-tab ${activeGroup === g ? 'active' : ''}`}
+            onClick={() => handleGroupClick(g)}
+          >
+            {g}
+          </button>
+        ))}
+      </div>
+      {/* Level 2 — Sub tabs */}
+      {subComps.length > 0 && (
+        <div className="sub-tabs">
+          {subComps.map((key) => {
+            const comp = competitions[key] || {};
+            return (
+              <button
+                key={key}
+                className={`sub-tab ${activeComp === key ? 'active' : ''}`}
+                onClick={() => setActiveComp(key)}
+              >
+                {comp.label || key}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -380,6 +432,7 @@ export default function DashboardPage({
   enrichedRows = [], availableAMs = [], availableTeams = [],
   filterAM, setFilterAM, filterTeam, setFilterTeam,
   masterAM, activeComp, setActiveComp,
+  groupedCompetitions = null, activeGroup, setActiveGroup,
   onGenerateWA, onGenerateBoD, onGoToUpload, period,
 }) {
   const [tableSearch,    setTableSearch]    = useState('');
@@ -517,7 +570,14 @@ export default function DashboardPage({
   // ── Render ──
   return (
     <div>
-      <CompTabs competitions={competitions} activeComp={activeComp} setActiveComp={setActiveComp} />
+      <NestedTabs
+        groupedCompetitions={groupedCompetitions}
+        activeGroup={activeGroup}
+        setActiveGroup={setActiveGroup}
+        competitions={competitions}
+        activeComp={activeComp}
+        setActiveComp={setActiveComp}
+      />
 
       {/* ── GLOBAL FILTER BAR ── */}
       {hasData && (availableAMs.length > 0 || availableTeams.length > 0) && (

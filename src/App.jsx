@@ -15,6 +15,7 @@ import {
   buildAggregated,
   computeMetrics,
   buildDynamicCompetitions,
+  buildGroupedCompetitions,
   downloadCECSV,
 } from './services/dataProcessor.js';
 import { generateWAReport, generateBoDReport } from './services/reportGenerators.js';
@@ -60,13 +61,34 @@ export default function App() {
   const [activeComp, setActiveComp]     = useState('BLACKMORES');
   const [period, setPeriod]             = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isLoading, setIsLoading]       = useState(true); // initial pull state
+  const [isLoading, setIsLoading]       = useState(true);
   const [dragOver, setDragOver]         = useState(false);
   const [reportView, setReportView]     = useState('wa');
   const [waReport, setWaReport]         = useState('');
   const [bodReport, setBodReport]       = useState('');
   const [isAdmin, setIsAdmin]           = useState(false);
   const [sidebarOpen, setSidebarOpen]   = useState(false);
+
+  // ── Theme (‘light’ | ‘dark’ | ‘orange’) ──────────────────────────────────
+  const [theme, setTheme] = useState(() => localStorage.getItem('sgm-theme') || 'light');
+
+  // Apply data-theme attribute to <html> element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme === 'light' ? '' : theme);
+    localStorage.setItem('sgm-theme', theme);
+  }, [theme]);
+
+  const cycleTheme = useCallback(() => {
+    setTheme((t) => t === 'light' ? 'dark' : t === 'dark' ? 'orange' : 'light');
+  }, []);
+
+  const THEME_ICONS = { light: '🌸', dark: '🌙', orange: '🔥' };
+  const THEME_LABELS = { light: 'Rose', dark: 'Dark', orange: 'Orange' };
+
+  // ── Grouped competitions (from List Produk GROUP column) ────────────────
+  // null = tidak ada GROUP column → DashboardPage pakai flat comp-tabs lama
+  const [groupedCompetitions, setGroupedCompetitions] = useState(null);
+  const [activeGroup, setActiveGroup] = useState(null);
 
   // ── File tracking ───────────────────────────────────────────
   const [uploadedFiles, setUploadedFiles]   = useState([]);
@@ -160,6 +182,13 @@ export default function App() {
         toast('📋 Memuat List Produk Kompetisi...', 'info');
         listProduk = await parseListProduk(lpFile);
         if (!Object.keys(listProduk).length) throw new Error('List Produk kosong. Kolom wajib: ITEM CODE, KOMPETISI');
+        // Extract GROUP hierarchy for nested tabs
+        const grouped = buildGroupedCompetitions(listProduk);
+        setGroupedCompetitions(grouped);
+        if (grouped) {
+          const firstGroup = Object.keys(grouped)[0];
+          setActiveGroup(firstGroup);
+        }
       }
 
       let masterAM = {};
@@ -358,6 +387,10 @@ export default function App() {
                 background: '#dcfce7', color: '#15803d', fontWeight: 700,
               }}>🔓 Admin</span>
             )}
+            {/* Theme toggle */}
+            <button className="theme-toggle" onClick={cycleTheme} title="Ganti tema">
+              {THEME_ICONS[theme]} {THEME_LABELS[theme]}
+            </button>
             {hasData && (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-outline btn-sm" onClick={handleGenerateWA}>📲 WA Report</button>
@@ -407,6 +440,9 @@ export default function App() {
               period={period}
               activeComp={activeComp}
               setActiveComp={setActiveComp}
+              groupedCompetitions={groupedCompetitions}
+              activeGroup={activeGroup}
+              setActiveGroup={setActiveGroup}
               onGenerateWA={handleGenerateWA}
               onGenerateBoD={handleGenerateBoD}
               onGoToUpload={() => handleSetPage('upload')}
@@ -427,6 +463,9 @@ export default function App() {
               onCopy={handleCopy}
               processed={result?.processed || {}}
               period={period}
+              groupedCompetitions={groupedCompetitions}
+              activeGroup={activeGroup}
+              setActiveGroup={setActiveGroup}
             />
           )}
         </div>

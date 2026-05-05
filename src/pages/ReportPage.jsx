@@ -10,6 +10,9 @@ export default function ReportPage({
   competitions,
   activeComp,
   setActiveComp,
+  groupedCompetitions,
+  activeGroup,
+  setActiveGroup,
   reportView,
   setReportView,
   waReport,
@@ -65,19 +68,55 @@ export default function ReportPage({
         ))}
       </div>
 
-      {/* ── Competition selector ─────────────────────────────────────── */}
-      <div className="comp-tabs" style={{ marginBottom: 20 }}>
-        {compEntries.map(([key, comp]) => (
-          <button
-            key={key}
-            className={`comp-tab ${activeComp === key ? 'active' : ''}`}
-            onClick={() => setActiveComp(key)}
-          >
-            <span className="comp-emoji">{comp.emoji}</span>
-            {comp.label || comp.name}
-          </button>
-        ))}
-      </div>
+      {/* ── Competition selector (nested or flat) ──────────────────────── */}
+      {groupedCompetitions ? (
+        <div style={{ marginBottom: 20 }}>
+          {/* Level 1 — Group tabs */}
+          <div className="group-tabs">
+            {Object.keys(groupedCompetitions).map((g) => (
+              <button
+                key={g}
+                className={`group-tab ${activeGroup === g ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveGroup(g);
+                  const first = (groupedCompetitions[g] || [])[0];
+                  if (first) setActiveComp(first);
+                }}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+          {/* Level 2 — Sub tabs */}
+          <div className="sub-tabs">
+            {(groupedCompetitions[activeGroup] || []).map((key) => {
+              const comp = competitions[key] || {};
+              return (
+                <button
+                  key={key}
+                  className={`sub-tab ${activeComp === key ? 'active' : ''}`}
+                  onClick={() => setActiveComp(key)}
+                >
+                  {comp.label || key}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="comp-tabs" style={{ marginBottom: 20 }}>
+          {compEntries.map(([key, comp]) => (
+            <button
+              key={key}
+              className={`comp-tab ${activeComp === key ? 'active' : ''}`}
+              onClick={() => setActiveComp(key)}
+            >
+              <span className="comp-emoji">{comp.emoji}</span>
+              {comp.label || comp.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════
           WA REPORT VIEW
