@@ -87,6 +87,13 @@ export default function App() {
   const THEME_ICONS = { light: '🌸', dark: '🌙', orange: '🔥' };
   const THEME_LABELS = { light: 'Rose', dark: 'Dark', orange: 'Orange' };
 
+  // ── Processed result — must be declared BEFORE any useMemo that reads it ────
+  const [result, setResult] = useState(null);
+
+  // ── Global Filter state ────────────────────────────────────────────────
+  const [filterAM,   setFilterAM]   = useState('');
+  const [filterTeam, setFilterTeam] = useState('');
+
   // ── Grouped competitions — DERIVED from result.processed ──────────────
   // Rebuild otomatis setiap result berubah: saat upload MAUPUN Supabase pull.
   // MK keys dideteksi via cfg.isMK. ListProduk groups via cfg.group.
@@ -141,13 +148,6 @@ export default function App() {
   const [masterAmFile, setMasterAmFile]     = useState(null);
   const [masterCeFile, setMasterCeFile]     = useState(null);
   const [mkFile, setMkFile]                 = useState(null);
-
-  // ── Processed result ────────────────────────────────────────────
-  const [result, setResult] = useState(null);
-
-  // ── Global Filter state (persists across comp tab changes) ────────
-  const [filterAM,   setFilterAM]   = useState('');
-  const [filterTeam, setFilterTeam] = useState('');
 
   const { toasts, toast } = useToasts();
 
