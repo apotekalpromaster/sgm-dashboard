@@ -798,7 +798,14 @@ export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) 
 
   const processed = {};
   Object.entries(byK).forEach(([k, rows]) => {
-    const cfg = COMPETITION_CFG[k] || {};
+    const baseCfg = COMPETITION_CFG[k] || {};
+
+    // Inject cfg.group from listProduk so nested tab hierarchy survives Supabase pull.
+    // Find the first row's kompetisi entry in listProduk to get its group.
+    const sampleItem = rows[0]?.item;
+    const produkGroup = sampleItem ? listProduk[sampleItem]?.group : null;
+    const cfg = produkGroup ? { ...baseCfg, group: produkGroup } : baseCfg;
+
     processed[k] = {
       ...aggregateOneCompetition(rows, masterCE, storeCodesSet, cfg),
       matchedCount: matched,

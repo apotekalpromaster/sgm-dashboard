@@ -87,10 +87,53 @@ export default function App() {
   const THEME_ICONS = { light: '🌸', dark: '🌙', orange: '🔥' };
   const THEME_LABELS = { light: 'Rose', dark: 'Dark', orange: 'Orange' };
 
-  // ── Grouped competitions (from List Produk GROUP column) ────────────────
-  // null = tidak ada GROUP column → DashboardPage pakai flat comp-tabs lama
-  const [groupedCompetitions, setGroupedCompetitions] = useState(null);
+  // ── Grouped competitions — DERIVED from result.processed ──────────────
+  // Rebuild otomatis setiap result berubah: saat upload MAUPUN Supabase pull.
+  // MK keys dideteksi via cfg.isMK. ListProduk groups via cfg.group.
+  // null = tidak ada group data → NestedTabs fallback ke flat comp-tabs.
+  const groupedCompetitions = useMemo(() => {
+    if (!result?.processed) return null;
+    const grouped = {};
+
+    Object.entries(result.processed).forEach(([compKey, D]) => {
+      const cfg = D?.cfg || {};
+
+      // MK COMPETITION: semua keys dengan isMK=true masuk ke grup 'MK COMPETITION'
+      if (cfg.isMK) {
+        const G = 'MK COMPETITION';
+        if (!grouped[G]) grouped[G] = [];
+        if (!grouped[G].includes(compKey)) grouped[G].push(compKey);
+        return;
+      }
+
+      // Non-MK: gunakan cfg.group jika ada (dari parseListProduk GROUP DASHBOARD column)
+      const groupLabel = cfg.group || null;
+      if (groupLabel) {
+        if (!grouped[groupLabel]) grouped[groupLabel] = [];
+        if (!grouped[groupLabel].includes(compKey)) grouped[groupLabel].push(compKey);
+      }
+    });
+
+    return Object.keys(grouped).length ? grouped : null;
+  }, [result]);
+
   const [activeGroup, setActiveGroup] = useState(null);
+
+  // Sync activeGroup setiap groupedCompetitions berubah (upload + refresh)
+  // Anti-infinite-loop: hanya update jika activeGroup tidak valid
+  useEffect(() => {
+    if (!groupedCompetitions) return;
+    const groups = Object.keys(groupedCompetitions);
+    if (!groups.length) return;
+    // Jika activeGroup kosong atau tidak ada di groups saat ini → reset ke grup pertama
+    if (!activeGroup || !groupedCompetitions[activeGroup]) {
+      const firstGroup = groups[0];
+      setActiveGroup(firstGroup);
+      // Juga sync activeComp ke sub-tab pertama dari grup tersebut
+      const firstComp = (groupedCompetitions[firstGroup] || [])[0];
+      if (firstComp) setActiveComp(firstComp);
+    }
+  }, [groupedCompetitions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── File tracking ───────────────────────────────────────────
   const [uploadedFiles, setUploadedFiles]   = useState([]);
@@ -185,13 +228,9 @@ export default function App() {
         toast('📋 Memuat List Produk Kompetisi...', 'info');
         listProduk = await parseListProduk(lpFile);
         if (!Object.keys(listProduk).length) throw new Error('List Produk kosong. Kolom wajib: ITEM CODE, KOMPETISI');
-        // Extract GROUP hierarchy for nested tabs
-        const grouped = buildGroupedCompetitions(listProduk);
-        setGroupedCompetitions(grouped);
-        if (grouped) {
-          const firstGroup = Object.keys(grouped)[0];
-          setActiveGroup(firstGroup);
-        }
+        // GROUP DASHBOARD hierarchy kini otomatis di-derive dari result.processed
+        // via useMemo — tidak perlu setGroupedCompetitions manual di sini.
+        // buildGroupedCompetitions tetap tersedia untuk keperluan lain jika dibutuhkan.
       }
 
       let masterAM = {};
@@ -226,15 +265,8 @@ export default function App() {
           Object.assign(res.processed, mkProcessed);
           toast(`✅ MK: ${mkRows.length} baris valid · ${Object.keys(mkProcessed).length} grup MK aktif`, 'success');
 
-          // Inject MK hierarchy into groupedCompetitions for NestedTabs L1/L2
-          const MK_GROUP_LABEL = 'MK COMPETITION';
-          const mkSubTabs = Object.keys(mkProcessed); // Grup 1-4 + Total
-          setGroupedCompetitions((prev) => {
-            const base = prev ? { ...prev } : {};
-            base[MK_GROUP_LABEL] = mkSubTabs;
-            return base;
-          });
-          setActiveGroup((prev) => prev || MK_GROUP_LABEL);
+          // groupedCompetitions otomatis rebuild via useMemo saat result berubah
+          // (MK keys terdeteksi via cfg.isMK) — tidak perlu inject manual.
         } catch (mkErr) {
           toast(`⚠️ MK parse warning: ${mkErr.message}`, 'error');
         }
