@@ -225,6 +225,16 @@ export default function App() {
           const mkProcessed = buildMKProcessed(mkRows, masterAM);
           Object.assign(res.processed, mkProcessed);
           toast(`✅ MK: ${mkRows.length} baris valid · ${Object.keys(mkProcessed).length} grup MK aktif`, 'success');
+
+          // Inject MK hierarchy into groupedCompetitions for NestedTabs L1/L2
+          const MK_GROUP_LABEL = 'MK COMPETITION';
+          const mkSubTabs = Object.keys(mkProcessed); // Grup 1-4 + Total
+          setGroupedCompetitions((prev) => {
+            const base = prev ? { ...prev } : {};
+            base[MK_GROUP_LABEL] = mkSubTabs;
+            return base;
+          });
+          setActiveGroup((prev) => prev || MK_GROUP_LABEL);
         } catch (mkErr) {
           toast(`⚠️ MK parse warning: ${mkErr.message}`, 'error');
         }

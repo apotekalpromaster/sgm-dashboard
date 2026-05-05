@@ -13,14 +13,16 @@ import {
 } from '../services/dataProcessor.js';
 
 // ═══════════════════════════════════════════════════════════════
-// NESTED COMPETITION TABS (Group L1 + Competition L2)
+// NESTED COMPETITION TABS — 2-Dimensional Navigation
+// L1 (Group): Solid pill with depth shadow
+// L2 (Competition): Outline pills with accent underline
 // Falls back to flat CompTabs when groupedCompetitions is null.
 // ═══════════════════════════════════════════════════════════════
 function NestedTabs({
   groupedCompetitions, activeGroup, setActiveGroup,
   competitions, activeComp, setActiveComp,
 }) {
-  // No grouping data — render original flat comp-tabs
+  // ── Flat fallback (no GROUP column uploaded) ─────────────
   if (!groupedCompetitions) {
     return (
       <div className="comp-tabs">
@@ -37,41 +39,126 @@ function NestedTabs({
     );
   }
 
-  // Grouped: L1 = groups, L2 = competitions within active group
-  const groups      = Object.keys(groupedCompetitions);
-  const subComps    = groupedCompetitions[activeGroup] || [];
+  const groups   = Object.keys(groupedCompetitions);
+  const subComps = groupedCompetitions[activeGroup] || [];
 
   const handleGroupClick = (g) => {
     setActiveGroup(g);
-    // Auto-select first competition in the new group
+    // Auto-reset L2 to first competition of the new group
     const first = (groupedCompetitions[g] || [])[0];
     if (first) setActiveComp(first);
   };
 
   return (
-    <div className="nested-tabs-wrap">
-      {/* Level 1 — Group tabs */}
-      <div className="group-tabs">
-        {groups.map((g) => (
-          <button
-            key={g}
-            className={`group-tab ${activeGroup === g ? 'active' : ''}`}
-            onClick={() => handleGroupClick(g)}
-          >
-            {g}
-          </button>
-        ))}
+    <div style={{
+      background: 'var(--surface-2)',
+      borderRadius: '14px 14px 0 0',
+      boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+      overflow: 'hidden',
+      marginBottom: 2,
+    }}>
+      {/* ── LEVEL 1: GROUP TABS — Solid pill row ─────────────── */}
+      <div style={{
+        display: 'flex',
+        gap: 6,
+        padding: '10px 12px 8px',
+        borderBottom: '1.5px solid var(--border)',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+      }}>
+        <span style={{
+          fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
+          color: 'var(--text-muted)', textTransform: 'uppercase',
+          marginRight: 6, whiteSpace: 'nowrap',
+          fontFamily: 'var(--font-sans, Poppins, sans-serif)',
+        }}>
+          GRUP
+        </span>
+        {groups.map((g) => {
+          const isActive = activeGroup === g;
+          return (
+            <button
+              key={g}
+              onClick={() => handleGroupClick(g)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 99,
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-sans, Poppins, sans-serif)',
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: 0.4,
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.18s ease',
+                // Active = solid rose with depth shadow
+                background: isActive
+                  ? 'var(--alpro-rose)'
+                  : 'var(--surface-0)',
+                color: isActive
+                  ? '#ffffff'
+                  : 'var(--text-muted)',
+                boxShadow: isActive
+                  ? '0 3px 10px rgba(225,29,72,0.30), inset 0 1px 0 rgba(255,255,255,0.15)'
+                  : '0 1px 3px rgba(0,0,0,0.07)',
+                borderColor: isActive ? 'transparent' : 'var(--border)',
+              }}
+            >
+              {g}
+            </button>
+          );
+        })}
       </div>
-      {/* Level 2 — Sub tabs */}
+
+      {/* ── LEVEL 2: COMPETITION TABS — Outline pill row ──────── */}
       {subComps.length > 0 && (
-        <div className="sub-tabs">
+        <div style={{
+          display: 'flex',
+          gap: 4,
+          padding: '8px 12px 0',
+          flexWrap: 'wrap',
+          alignItems: 'flex-end',
+        }}>
+          <span style={{
+            fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
+            color: 'var(--text-muted)', textTransform: 'uppercase',
+            marginRight: 4, marginBottom: 8, whiteSpace: 'nowrap',
+            fontFamily: 'var(--font-sans, Poppins, sans-serif)',
+          }}>
+            LABEL
+          </span>
           {subComps.map((key) => {
-            const comp = competitions[key] || {};
+            const comp     = competitions[key] || {};
+            const isActive = activeComp === key;
             return (
               <button
                 key={key}
-                className={`sub-tab ${activeComp === key ? 'active' : ''}`}
                 onClick={() => setActiveComp(key)}
+                style={{
+                  padding: '5px 14px 9px',
+                  background: 'transparent',
+                  border: '1.5px solid',
+                  borderBottomWidth: 0,
+                  borderColor: isActive
+                    ? 'var(--alpro-rose)'
+                    : 'transparent',
+                  borderRadius: '8px 8px 0 0',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-sans, Poppins, sans-serif)',
+                  fontSize: 12,
+                  fontWeight: isActive ? 700 : 500,
+                  color: isActive
+                    ? 'var(--alpro-rose)'
+                    : 'var(--text-secondary)',
+                  // Active tab gets a 2px bottom accent bar via boxShadow
+                  boxShadow: isActive
+                    ? 'inset 0 -2px 0 var(--alpro-rose)'
+                    : 'none',
+                  transition: 'all 0.15s ease',
+                  whiteSpace: 'nowrap',
+                  position: 'relative',
+                }}
               >
                 {comp.label || key}
               </button>

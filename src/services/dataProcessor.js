@@ -236,7 +236,6 @@ export async function parseMKFile(file) {
  * @returns {Object}                — { [MK_KEY]: CompetitionData }
  */
 export function buildMKProcessed(mkRows, masterAM = {}) {
-  // Group rows by MK competition key
   const byGroup = {};
   const MK_KEYS = [
     'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',
@@ -244,70 +243,119 @@ export function buildMKProcessed(mkRows, masterAM = {}) {
     'MK GRUP 3 (KULIT)',
     'MK GRUP 4 (MATA)',
   ];
-  MK_KEYS.forEach((k) => { byGroup[k] = {}; }); // storeCode → { ... }
+  MK_KEYS.forEach((k) => {
+    byGroup[k] = {
+      stores: {},   // storeCode → { code, name, category, am, area, qty, ns }
+      sps:    {},   // spName → { name, store, storeCode, am, area, qty, ns }
+      ams:    {},   // amName → { name, area, qty, ns }
+    };
+  });
 
-  // Also accumulate a TOTAL by storeCode across all groups
   const totalByStore = {};
+  const totalBySP    = {};
+  const totalByAM    = {};
+
+  // Build a set of all store codes for isStoreCodeSP filter
+  const storeCodesSet = new Set(Object.keys(masterAM));
 
   mkRows.forEach((r) => {
     const grp = MK_ITEM_GROUP[r.itemCode];
-    if (!grp) return; // unknown item — skip (safety)
+    if (!grp) return;
 
-    const master = masterAM[r.storeCode] || {};
+    // Sanitized lookup: try exact storeCode first, then space-stripped, then shortCode
+    const master = masterAM[r.storeCode]
+      || masterAM[r.storeCode.replace(/\s+/g, '').toUpperCase()]
+      || {};
+
     const storeName = master.storeName || r.storeFull;
     const category  = (master.category || '').toUpperCase();
     const amName    = master.amName || '';
     const area      = master.area   || '';
+    const grpData   = byGroup[grp];
 
-    // Per-group store accumulation
-    if (!byGroup[grp][r.storeCode]) {
-      byGroup[grp][r.storeCode] = {
-        code: r.storeCode, name: storeName, category, am: amName, area, qty: 0, ns: 0,
-      };
+    // ── Store accumulation ──────────────────────────────────
+    if (!grpData.stores[r.storeCode]) {
+      grpData.stores[r.storeCode] = { code: r.storeCode, name: storeName, category, am: amName, area, qty: 0, ns: 0 };
     }
-    byGroup[grp][r.storeCode].qty += r.qty;
-    byGroup[grp][r.storeCode].ns  += r.netSales;
+    grpData.stores[r.storeCode].qty += r.qty;
+    grpData.stores[r.storeCode].ns  += r.netSales;
 
-    // Total accumulation (all groups combined per store)
+    // ── Total store accumulation ────────────────────────────
     if (!totalByStore[r.storeCode]) {
-      totalByStore[r.storeCode] = {
-        code: r.storeCode, name: storeName, category, am: amName, area, qty: 0, ns: 0,
-      };
+      totalByStore[r.storeCode] = { code: r.storeCode, name: storeName, category, am: amName, area, qty: 0, ns: 0 };
     }
     totalByStore[r.storeCode].qty += r.qty;
     totalByStore[r.storeCode].ns  += r.netSales;
+
+    // ── Sales Person accumulation ───────────────────────────
+    const sp = r.salesperson || '';
+    // Exclude if SP looks like a store code (e.g. "JKJSTT1")
+    const isStoreLike = !sp || isStoreCodeSP(sp, storeCodesSet);
+    if (!isStoreLike) {
+      const spKey = sp.trim().toUpperCase();
+
+      if (!grpData.sps[spKey]) {
+        grpData.sps[spKey] = { name: sp.trim(), store: storeName, storeCode: r.storeCode, am: amName, area, qty: 0, ns: 0, incentive: 0 };
+      }
+      grpData.sps[spKey].qty += r.qty;
+      grpData.sps[spKey].ns  += r.netSales;
+
+      if (!totalBySP[spKey]) {
+        totalBySP[spKey] = { name: sp.trim(), store: storeName, storeCode: r.storeCode, am: amName, area, qty: 0, ns: 0, incentive: 0 };
+      }
+      totalBySP[spKey].qty += r.qty;
+      totalBySP[spKey].ns  += r.netSales;
+    }
+
+    // ── AM accumulation ─────────────────────────────────────
+    if (amName) {
+      const amKey = amName.trim().toUpperCase();
+      if (!grpData.ams[amKey]) {
+        grpData.ams[amKey] = { name: amName, area, qty: 0, ns: 0 };
+      }
+      grpData.ams[amKey].qty += r.qty;
+      grpData.ams[amKey].ns  += r.netSales;
+
+      if (!totalByAM[amKey]) {
+        totalByAM[amKey] = { name: amName, area, qty: 0, ns: 0 };
+      }
+      totalByAM[amKey].qty += r.qty;
+      totalByAM[amKey].ns  += r.netSales;
+    }
   });
 
   const mkProcessed = {};
 
-  // Build per-group processed entries
   MK_KEYS.forEach((key) => {
-    const storeLeader = Object.values(byGroup[key]).sort((a, b) => b.qty - a.qty);
-    const totalNS  = storeLeader.reduce((s, r) => s + r.ns,  0);
-    const totalQty = storeLeader.reduce((s, r) => s + r.qty, 0);
+    const g = byGroup[key];
+    const storeLeader = Object.values(g.stores).sort((a, b) => b.qty - a.qty);
+    const spLeader    = Object.values(g.sps).sort((a, b) => b.qty - a.qty);
+    const amLeader    = Object.values(g.ams).sort((a, b) => b.qty - a.qty);
     mkProcessed[key] = {
-      cfg:          COMPETITION_CFG[key] || {},
-      totalNS,  totalQty,
+      cfg:           COMPETITION_CFG[key] || {},
+      totalNS:       storeLeader.reduce((s, r) => s + r.ns,  0),
+      totalQty:      storeLeader.reduce((s, r) => s + r.qty, 0),
       storeLeader,
-      spLeader:     [],  // MK report has no per-SP breakdown needed
-      amLeader:     [],
-      ceLeaderboard: [],
-      itemBreakdown: [],
+      spLeader,
+      amLeader,
+      ceLeaderboard:  [],
+      itemBreakdown:  [],
       incentiveTotal: 0,
     };
   });
 
-  // Build TOTAL SALES MK entry
   const totalStoreLeader = Object.values(totalByStore).sort((a, b) => b.qty - a.qty);
+  const totalSPLeader    = Object.values(totalBySP).sort((a, b) => b.qty - a.qty);
+  const totalAMLeader    = Object.values(totalByAM).sort((a, b) => b.qty - a.qty);
   mkProcessed['MK TOTAL SALES'] = {
-    cfg:          COMPETITION_CFG['MK TOTAL SALES'] || {},
-    totalNS:      totalStoreLeader.reduce((s, r) => s + r.ns,  0),
-    totalQty:     totalStoreLeader.reduce((s, r) => s + r.qty, 0),
-    storeLeader:  totalStoreLeader,
-    spLeader:     [],
-    amLeader:     [],
-    ceLeaderboard: [],
-    itemBreakdown: [],
+    cfg:           COMPETITION_CFG['MK TOTAL SALES'] || {},
+    totalNS:       totalStoreLeader.reduce((s, r) => s + r.ns,  0),
+    totalQty:      totalStoreLeader.reduce((s, r) => s + r.qty, 0),
+    storeLeader:   totalStoreLeader,
+    spLeader:      totalSPLeader,
+    amLeader:      totalAMLeader,
+    ceLeaderboard:  [],
+    itemBreakdown:  [],
     incentiveTotal: 0,
   };
 
@@ -501,6 +549,9 @@ export function buildGroupedCompetitions(listProduk) {
  * Parse Master AM file.
  * Returns map: { [SHORT_CODE]: { storeName, category, amName, area } }
  * Required columns: Short Code, Category, AM Name, Area
+ *
+ * ANTI-DIRTY-DATA: Uses dual-key strategy.
+ * Both "0001 - JKJSTT1" and "JKJSTT1" are stored → join never fails due to spacing.
  */
 export async function parseMasterAM(file) {
   const raw = await parseFileRaw(file);
@@ -517,14 +568,31 @@ export async function parseMasterAM(file) {
   for (let i = hi + 1; i < raw.length; i++) {
     const r = raw[i];
     if (!r) continue;
-    const code = N(r[iC]);
-    if (!code) continue;
-    map[code] = {
+    const rawCode = String(r[iC] || '').trim();
+    if (!rawCode) continue;
+
+    const entry = {
       storeName: String(r[iN]   || '').trim(),
       category:  N(r[iCat]),
       amName:    String(r[iAM]  || '').trim(),
       area:      String(r[iAr]  || '').trim(),
     };
+
+    // Key 1: Normalized (spaces stripped) — catches "0001 - JKJSTT1" → "0001-JKJSTT1"
+    const normalizedKey = rawCode.replace(/\s+/g, '').toUpperCase();
+    map[normalizedKey] = entry;
+
+    // Key 2: Short code extracted — catches "JKJSTT1" (what MK storeCode produces)
+    const shortKey = extractCode(rawCode);
+    if (shortKey && shortKey !== normalizedKey) {
+      map[shortKey] = entry;
+    }
+
+    // Key 3: Original UPPER — belt-and-suspenders for exact match
+    const upperKey = rawCode.toUpperCase();
+    if (upperKey !== normalizedKey && upperKey !== shortKey) {
+      map[upperKey] = entry;
+    }
   }
   return map;
 }
