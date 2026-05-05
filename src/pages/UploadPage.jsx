@@ -52,6 +52,7 @@ export default function UploadPage({
   listProdukFile,
   masterAmFile,
   masterCeFile,
+  mkFile,
   isProcessing,
   hasData,
   dragOver,
@@ -60,6 +61,7 @@ export default function UploadPage({
   onListProdukChange,
   onMasterAmChange,
   onMasterCeChange,
+  onMkFileChange,
   onDrop,
   onProcess,
   onGoToDashboard,
@@ -149,6 +151,20 @@ export default function UploadPage({
           onChange={(e) => {
             const f = e.target.files[0];
             if (f) onMasterCeChange(f);
+            e.target.value = '';
+          }}
+        />
+
+        {/* MK Competition picker */}
+        <FilePickerRow
+          icon="💊"
+          label="MK Competition Report"
+          required={false}
+          hint="MK STORE REPORT (.xlsx) — aktifkan 4 Grup MK + Total Sales MK di Dashboard"
+          fileName={mkFile?.name}
+          onChange={(e) => {
+            const f = e.target.files[0];
+            if (f) onMkFileChange(f);
             e.target.value = '';
           }}
         />

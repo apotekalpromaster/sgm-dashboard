@@ -235,9 +235,163 @@ function FullListModal({ title, onClose, children }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// STORE LEADERBOARD TABLE
+// STORE LEADERBOARD TABLE — MK-aware
 // ═══════════════════════════════════════════════════════════════
-function StoreTable({ rows, rules }) {
+
+/**
+ * Compute per-tier rank for MK TOTAL mode.
+ * Returns same rows array with `tierRank` added (1-based rank within tier bucket).
+ * GOLD bucket = GOLD + PLATINUM + TITANIUM
+ */
+function assignMKTotalRanks(rows) {
+  const buckets = { BRONZE: [], SILVER: [], GOLD: [] };
+  rows.forEach((r) => {
+    const cat = (r.category || '').toUpperCase();
+    const bucket = (cat === 'GOLD' || cat === 'PLATINUM' || cat === 'TITANIUM') ? 'GOLD'
+      : cat === 'SILVER' ? 'SILVER'
+      : 'BRONZE';
+    buckets[bucket].push(r);
+  });
+  // Sort each bucket by qty desc, assign rank
+  const ranked = [];
+  Object.entries(buckets).forEach(([bucket, stores]) => {
+    stores.sort((a, b) => b.qty - a.qty);
+    stores.forEach((s, i) => ranked.push({ ...s, _bucket: bucket, _bucketRank: i + 1 }));
+  });
+  return ranked;
+}
+
+function StoreTable({ rows, rules, mkMode = false, mkCfg = {} }) {
+  // ── MK TOTAL mode ──────────────────────────────────────────
+  if (mkMode && mkCfg.isMKTotal) {
+    const rankedRows = assignMKTotalRanks(rows || []);
+    const topN = mkCfg.mkTierTopN || { BRONZE: 8, SILVER: 10, GOLD: 2 };
+    const tierTarget = mkCfg.mkTierTarget || {};
+
+    // Sort display: BRONZE first, then SILVER, then GOLD bucket; within bucket by qty desc
+    const BUCKET_ORDER = { BRONZE: 0, SILVER: 1, GOLD: 2 };
+    rankedRows.sort((a, b) => {
+      const ba = BUCKET_ORDER[a._bucket] ?? 99;
+      const bb = BUCKET_ORDER[b._bucket] ?? 99;
+      return ba !== bb ? ba - bb : b.qty - a.qty;
+    });
+
+    return (
+      <table className="data-table" style={{ width: '100%' }}>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Nama Toko</th>
+            <th>Tier</th>
+            <th>AM</th>
+            <th style={{ textAlign: 'right' }}>Qty</th>
+            <th style={{ textAlign: 'right' }}>Target</th>
+            <th style={{ textAlign: 'right' }}>Status</th>
+            <th style={{ textAlign: 'right' }}>Net Sales</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rankedRows.map((row, i) => {
+            const target  = tierTarget[(row.category || '').toUpperCase()] || 0;
+            const qual    = !target || row.qty >= target;
+            const maxMedal = topN[row._bucket] || 0;
+            const hasMedal = maxMedal > 0 && row._bucketRank <= maxMedal;
+            const rankDisp = hasMedal ? row._bucketRank - 1 : 999; // getRankEmoji uses 0-based
+            return (
+              <tr key={`${row.code}-${i}`}>
+                <td>
+                  {hasMedal
+                    ? <span className={`rank-badge ${getRankBadgeClass(rankDisp)}`}>{getRankEmoji(rankDisp)}</span>
+                    : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>#{row._bucketRank}</span>
+                  }
+                </td>
+                <td>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{row.name || row.storeName}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{row.code}</div>
+                </td>
+                <td><span className={`tier-badge tier-${row.category}`}>{row.category || '—'}</span></td>
+                <td style={{ fontSize: 12 }}>{row.am || '—'}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatNum(row.qty)}</td>
+                <td style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>{target || '—'}</td>
+                <td style={{ textAlign: 'right' }}>
+                  {target > 0 ? (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+                      background: qual ? '#dcfce7' : '#ffe4e6',
+                      color: qual ? '#15803d' : '#e11d48',
+                    }}>
+                      {qual ? '✓ OK' : `✗ min ${target}`}
+                    </span>
+                  ) : '—'}
+                </td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(row.ns ?? row.netSales)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  // ── MK GRUP 1-4 mode ──────────────────────────────────────
+  if (mkMode && mkCfg.isMK && !mkCfg.isMKTotal) {
+    const target = mkCfg.mkQtyTarget || 0;
+    const topN   = mkCfg.mkTopN || 5;
+    return (
+      <table className="data-table" style={{ width: '100%' }}>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Nama Toko</th>
+            <th>Tier</th>
+            <th>AM</th>
+            <th style={{ textAlign: 'right' }}>Qty</th>
+            <th style={{ textAlign: 'right' }}>Target</th>
+            <th style={{ textAlign: 'right' }}>Status</th>
+            <th style={{ textAlign: 'right' }}>Net Sales</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(rows || []).map((row, i) => {
+            const qual    = !target || row.qty >= target;
+            const hasMedal = i < topN;
+            return (
+              <tr key={`${row.code}-${i}`}>
+                <td>
+                  {hasMedal
+                    ? <span className={`rank-badge ${getRankBadgeClass(i)}`}>{getRankEmoji(i)}</span>
+                    : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>#{i + 1}</span>
+                  }
+                </td>
+                <td>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{row.name || row.storeName}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{row.code}</div>
+                </td>
+                <td><span className={`tier-badge tier-${row.category}`}>{row.category || '—'}</span></td>
+                <td style={{ fontSize: 12 }}>{row.am || '—'}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatNum(row.qty)}</td>
+                <td style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>{target || '—'}</td>
+                <td style={{ textAlign: 'right' }}>
+                  {target > 0 ? (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+                      background: qual ? '#dcfce7' : '#ffe4e6',
+                      color: qual ? '#15803d' : '#e11d48',
+                    }}>
+                      {qual ? '✓ OK' : `✗ min ${target}`}
+                    </span>
+                  ) : '—'}
+                </td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(row.ns ?? row.netSales)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  // ── Standard non-MK mode (existing logic unchanged) ───────
   return (
     <table className="data-table" style={{ width: '100%' }}>
       <thead>
@@ -479,6 +633,10 @@ export default function DashboardPage({
 
   const rules = competitions[activeComp] || {};
 
+  // Detect MK mode — activeComp is one of the MK COMPETITION keys
+  const mkCfg  = rules.isMK ? rules : null;
+  const mkMode = !!mkCfg;
+
   // TAHAP 3: Compute all KPI metrics from D (filter-aware)
   // computeMetricsFromD reads totalNS/totalQty/storeLeader/amLeader directly from D
   // so every number on screen reflects the active filter.
@@ -660,7 +818,7 @@ export default function DashboardPage({
       {modal === 'store' && (
         <FullListModal title={`Semua Toko — ${rules.label || activeComp}`} onClose={() => setModal(null)}>
           <div style={{ padding: 4 }}>
-            <StoreTable rows={D?.storeLeader || []} rules={rules} />
+            <StoreTable rows={D?.storeLeader || []} rules={rules} mkMode={mkMode} mkCfg={mkCfg || {}} />
           </div>
         </FullListModal>
       )}
@@ -849,7 +1007,7 @@ export default function DashboardPage({
               </div>
             </div>
             <div className="table-wrap">
-              <StoreTable rows={tableData.slice(0, 15)} rules={rules} />
+              <StoreTable rows={tableData.slice(0, 15)} rules={rules} mkMode={mkMode} mkCfg={mkCfg || {}} />
               {tableData.length > 15 && (
                 <div style={{ textAlign: 'center', padding: '10px 0 14px', fontSize: 12, color: 'var(--text-muted)' }}>
                   +{tableData.length - 15} toko lainnya —{' '}

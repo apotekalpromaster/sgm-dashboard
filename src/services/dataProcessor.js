@@ -59,9 +59,261 @@ export const COMPETITION_CFG = {
     incentivePerQty: 30_000,
     incentiveItems:  ['0404405', '0403318'],
   },
+
+  // ── MK COMPETITION ────────────────────────────────────────────────────
+  // mkQtyTarget = target qty per store (Status column in leaderboard)
+  // mkTopN      = berapa toko teratas mendapat medali per grup
+  'MK GRUP 1 (PERNAFASAN & PENCERNAAN)': {
+    label:          'MK Grup 1',
+    color:          '#7c3aed',
+    periode:        '1 Mei–3 Mei 2026',
+    targetNetSales: 0,
+    targetQty:      null,
+    mkQtyTarget:    100,
+    mkTopN:         5,
+    isMK:           true,
+  },
+  'MK GRUP 2 (DEMAM & NYERI)': {
+    label:          'MK Grup 2',
+    color:          '#d97706',
+    periode:        '1 Mei–3 Mei 2026',
+    targetNetSales: 0,
+    targetQty:      null,
+    mkQtyTarget:    80,
+    mkTopN:         5,
+    isMK:           true,
+  },
+  'MK GRUP 3 (KULIT)': {
+    label:          'MK Grup 3',
+    color:          '#db2777',
+    periode:        '1 Mei–3 Mei 2026',
+    targetNetSales: 0,
+    targetQty:      null,
+    mkQtyTarget:    60,
+    mkTopN:         5,
+    isMK:           true,
+  },
+  'MK GRUP 4 (MATA)': {
+    label:          'MK Grup 4',
+    color:          '#0891b2',
+    periode:        '1 Mei–3 Mei 2026',
+    targetNetSales: 0,
+    targetQty:      null,
+    mkQtyTarget:    60,
+    mkTopN:         5,
+    isMK:           true,
+  },
+  'MK TOTAL SALES': {
+    label:          'Total Sales MK',
+    color:          '#16a34a',
+    periode:        '1 Mei–3 Mei 2026',
+    targetNetSales: 0,
+    targetQty:      null,
+    isMK:           true,
+    isMKTotal:      true,
+    // Target qty per toko berdasarkan tier
+    mkTierTarget:   { BRONZE: 100, SILVER: 150, GOLD: 200, PLATINUM: 200, TITANIUM: 200 },
+    // Top-N medali per tier bucket (GOLD bucket = GOLD + PLATINUM + TITANIUM)
+    mkTierTopN:     { BRONZE: 8, SILVER: 10, GOLD: 2 },
+  },
 };
 
 export const TIER_ORDER = ['TITANIUM', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE', ''];
+
+// ═══════════════════════════════════════════════════════════════
+// MK ITEM CODE → GROUP MAPPING
+// Source: MK Competition rules. All item codes from actual MK STORE REPORT.
+// ═══════════════════════════════════════════════════════════════
+export const MK_ITEM_GROUP = {
+  // GRUP 1 — Pernafasan & Pencernaan
+  '100005107': 'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',  // MK FLU
+  '100005115': 'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',  // MK BATUK BERDAHAK
+  '100008440': 'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',  // MK BATUK KERING (TABLET)
+  '100008390': 'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',  // MK SAKIT TENGGOROKAN
+  '100005131': 'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',  // MK DIARE
+  '100008424': 'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',  // MK SAKIT MAAG AKUT
+  '100008432': 'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',  // MK SAKIT MAAG KRONIS
+  // GRUP 2 — Demam & Nyeri
+  '100005099': 'MK GRUP 2 (DEMAM & NYERI)',            // MK DEMAM
+  '100008408': 'MK GRUP 2 (DEMAM & NYERI)',            // MK NYERI HAID
+  '100008416': 'MK GRUP 2 (DEMAM & NYERI)',            // MK MIGRAIN
+  '100008473': 'MK GRUP 2 (DEMAM & NYERI)',            // MK NYERI SENDI
+  // GRUP 3 — Kulit
+  '100005123': 'MK GRUP 3 (KULIT)',                    // MK KULIT GATAL ALERGI
+  '100006436': 'MK GRUP 3 (KULIT)',                    // MK EKSIM BASAH (TANPA LUKA)
+  '100006444': 'MK GRUP 3 (KULIT)',                    // MK EKSIM BASAH (LUKA)
+  '100006451': 'MK GRUP 3 (KULIT)',                    // MK EKSIM KERING
+  '100006469': 'MK GRUP 3 (KULIT)',                    // MK INFEKSI KULIT VIRUS
+  '100006477': 'MK GRUP 3 (KULIT)',                    // MK PANU (TINEA VERSICOLOR)
+  '100006485': 'MK GRUP 3 (KULIT)',                    // MK KADAS (TINEA CRURIS)
+  '100006493': 'MK GRUP 3 (KULIT)',                    // MK KURAP (TINEA CORPORIS)
+  '100006501': 'MK GRUP 3 (KULIT)',                    // MK LUKA INFEKSI RINGAN
+  '100008465': 'MK GRUP 3 (KULIT)',                    // MK JERAWAT
+  // GRUP 4 — Mata
+  '100008481': 'MK GRUP 4 (MATA)',                     // MK MATA IRITASI
+  '100008499': 'MK GRUP 4 (MATA)',                     // MK MATA ALERGI
+  '100008507': 'MK GRUP 4 (MATA)',                     // MK MATA KERING
+};
+
+// ═══════════════════════════════════════════════════════════════
+// MK FILE PARSER — Forward Fill + Subtotal filter
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Parse MK STORE REPORT Excel file.
+ *
+ * Format quirks:
+ *   - Row 0-20: header/metadata (skip until we find "Date" column header)
+ *   - Date col (0) and Store col (1) use merged cells → appear as "" in SheetJS
+ *   - Rows where Store contains "Total" are subtotal rows → discard
+ *   - Last rows: "Grand Total" row → discard
+ *   - Col indices (0-based): Date=0, Store=1, SalesNo=2, SP=3, ItemCode=4, ItemName=5, Qty=6, NetSales=7
+ *
+ * @param {File} file
+ * @returns {Promise<MKRow[]>}  clean transaction rows with storeCode, storeFull, itemCode, qty, netSales
+ */
+export async function parseMKFile(file) {
+  const raw = await parseFileRaw(file);
+
+  // Find header row — look for row containing "Date" AND "Store"
+  let hi = 0;
+  for (let i = 0; i < Math.min(raw.length, 30); i++) {
+    const cells = raw[i].map((c) => String(c || '').trim().toLowerCase());
+    if (cells.includes('date') && cells.includes('store')) { hi = i; break; }
+  }
+
+  const rows  = [];
+  let lastDate  = '';
+  let lastStore = '';  // "0001-JKJSTT1" — the raw store string
+
+  for (let i = hi + 1; i < raw.length; i++) {
+    const r = raw[i];
+
+    // Forward fill: carry over last non-empty Date / Store
+    if (String(r[0] || '').trim()) lastDate  = String(r[0]).trim();
+    if (String(r[1] || '').trim()) lastStore = String(r[1]).trim();
+
+    const store = lastStore;
+
+    // Filter 1: discard subtotal rows (store contains "Total")
+    if (store.toLowerCase().includes('total')) continue;
+
+    // Filter 2: discard rows without a SalesNo (not real transactions)
+    const salesNo = String(r[2] || '').trim();
+    if (!salesNo) continue;
+
+    const itemCode = String(r[4] || '').trim();
+    if (!itemCode) continue;
+
+    const qty      = parseFloat(r[6]) || 0;
+    const netSales = parseFloat(r[7]) || 0;
+
+    // Extract short code: "0001-JKJSTT1" → "JKJSTT1"
+    const storeCode = extractCode(store);
+
+    rows.push({
+      date:      lastDate,
+      storeFull: store,
+      storeCode,
+      salesNo,
+      salesperson: String(r[3] || '').trim(),
+      itemCode,
+      itemName:  String(r[5] || '').trim(),
+      qty,
+      netSales,
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * Aggregate MK rows into processed entries for 4 groups + 1 total.
+ * Injects directly into result.processed — no new DB table needed.
+ *
+ * @param {MKRow[]} mkRows          — output of parseMKFile
+ * @param {Object}  masterAM        — { [storeCode]: { storeName, category, amName, area } }
+ * @returns {Object}                — { [MK_KEY]: CompetitionData }
+ */
+export function buildMKProcessed(mkRows, masterAM = {}) {
+  // Group rows by MK competition key
+  const byGroup = {};
+  const MK_KEYS = [
+    'MK GRUP 1 (PERNAFASAN & PENCERNAAN)',
+    'MK GRUP 2 (DEMAM & NYERI)',
+    'MK GRUP 3 (KULIT)',
+    'MK GRUP 4 (MATA)',
+  ];
+  MK_KEYS.forEach((k) => { byGroup[k] = {}; }); // storeCode → { ... }
+
+  // Also accumulate a TOTAL by storeCode across all groups
+  const totalByStore = {};
+
+  mkRows.forEach((r) => {
+    const grp = MK_ITEM_GROUP[r.itemCode];
+    if (!grp) return; // unknown item — skip (safety)
+
+    const master = masterAM[r.storeCode] || {};
+    const storeName = master.storeName || r.storeFull;
+    const category  = (master.category || '').toUpperCase();
+    const amName    = master.amName || '';
+    const area      = master.area   || '';
+
+    // Per-group store accumulation
+    if (!byGroup[grp][r.storeCode]) {
+      byGroup[grp][r.storeCode] = {
+        code: r.storeCode, name: storeName, category, am: amName, area, qty: 0, ns: 0,
+      };
+    }
+    byGroup[grp][r.storeCode].qty += r.qty;
+    byGroup[grp][r.storeCode].ns  += r.netSales;
+
+    // Total accumulation (all groups combined per store)
+    if (!totalByStore[r.storeCode]) {
+      totalByStore[r.storeCode] = {
+        code: r.storeCode, name: storeName, category, am: amName, area, qty: 0, ns: 0,
+      };
+    }
+    totalByStore[r.storeCode].qty += r.qty;
+    totalByStore[r.storeCode].ns  += r.netSales;
+  });
+
+  const mkProcessed = {};
+
+  // Build per-group processed entries
+  MK_KEYS.forEach((key) => {
+    const storeLeader = Object.values(byGroup[key]).sort((a, b) => b.qty - a.qty);
+    const totalNS  = storeLeader.reduce((s, r) => s + r.ns,  0);
+    const totalQty = storeLeader.reduce((s, r) => s + r.qty, 0);
+    mkProcessed[key] = {
+      cfg:          COMPETITION_CFG[key] || {},
+      totalNS,  totalQty,
+      storeLeader,
+      spLeader:     [],  // MK report has no per-SP breakdown needed
+      amLeader:     [],
+      ceLeaderboard: [],
+      itemBreakdown: [],
+      incentiveTotal: 0,
+    };
+  });
+
+  // Build TOTAL SALES MK entry
+  const totalStoreLeader = Object.values(totalByStore).sort((a, b) => b.qty - a.qty);
+  mkProcessed['MK TOTAL SALES'] = {
+    cfg:          COMPETITION_CFG['MK TOTAL SALES'] || {},
+    totalNS:      totalStoreLeader.reduce((s, r) => s + r.ns,  0),
+    totalQty:     totalStoreLeader.reduce((s, r) => s + r.qty, 0),
+    storeLeader:  totalStoreLeader,
+    spLeader:     [],
+    amLeader:     [],
+    ceLeaderboard: [],
+    itemBreakdown: [],
+    incentiveTotal: 0,
+  };
+
+  return mkProcessed;
+}
+
 
 // ── TIER NUMBER LOOKUP ─────────────────────────────────────────
 // Maps tier name → tier number used as qtyMin key
