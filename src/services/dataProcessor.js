@@ -182,53 +182,56 @@ export async function parseMKFile(file) {
     if (cells.includes('date') && cells.includes('store')) { hi = i; break; }
   }
 
-  const rows  = [];
-  let lastDate  = '';
-  let lastStore = '';
+  const rows    = [];
+  let lastDate    = '';
+  let lastStore   = '';
+  // SalesNo (col C) dan SP (col D) JUGA menggunakan merged cells —
+  // satu SalesNo bisa mencakup banyak baris item di bawahnya.
+  let lastSalesNo = '';
+  let lastSP      = '';
 
   for (let i = hi + 1; i < raw.length; i++) {
     const r = raw[i];
     if (!r) continue;
 
     // ── STEP 1: Capture RAW cell values (before any forward fill) ─────────
-    const rawDate  = String(r[0] || '').trim();
-    const rawStore = String(r[1] || '').trim();
-    const rawSP    = String(r[3] || '').trim();
+    const rawDate    = String(r[0] || '').trim();
+    const rawStore   = String(r[1] || '').trim();
     const rawSalesNo = String(r[2] || '').trim();
+    const rawSP      = String(r[3] || '').trim();
 
-    // ── STEP 2: Filter SEBELUM forward fill (gunakan nilai raw asli) ───────
-    // Buang baris jika SALAH SATU kondisi ini terpenuhi:
-    //   a) kolom Date mengandung "Total" (case-insensitive)
-    //   b) kolom Store mengandung "Total"
-    //   c) kolom Sales Person mengandung "Total"
-    //   d) kolom Sales No kosong
+    // ── STEP 2: Filter pada nilai RAW untuk buang baris subtotal ──────────
+    // Subtotal rows biasanya memiliki kata "Total" di Date, Store, atau SP.
+    // JANGAN filter berdasarkan SalesNo kosong dulu — itu akan di-forward-fill.
     const containsTotal = (s) => s.toLowerCase().includes('total');
     if (containsTotal(rawDate) || containsTotal(rawStore) || containsTotal(rawSP)) continue;
-    if (!rawSalesNo) continue;
 
-    // ── STEP 3: Forward fill (hanya untuk baris yang sudah lolos filter) ──
-    if (rawDate)  lastDate  = rawDate;
-    if (rawStore) lastStore = rawStore;
+    // ── STEP 3: Forward fill SEMUA kolom merged (Date, Store, SalesNo, SP) ─
+    if (rawDate)    lastDate    = rawDate;
+    if (rawStore)   lastStore   = rawStore;
+    if (rawSalesNo) lastSalesNo = rawSalesNo;
+    if (rawSP)      lastSP      = rawSP;
 
-    // Jika setelah forward fill store masih kosong → skip (baris awal sebelum ada store)
-    if (!lastStore) continue;
+    // ── STEP 4: Validasi post-fill ─────────────────────────────────────────
+    // Setelah fill, jika SalesNo masih kosong → bukan transaksi valid (header/noise)
+    if (!lastSalesNo) continue;
+    if (!lastStore)   continue;
 
-    // ── STEP 4: Extract remaining fields ──────────────────────────────────
+    // ── STEP 5: Extract remaining fields ──────────────────────────────────
     const itemCode = String(r[4] || '').trim();
     if (!itemCode) continue;
 
     const qty      = parseFloat(r[6]) || 0;
     const netSales = parseFloat(r[7]) || 0;
 
-    // Extract short code: "0001-JKJSTT1" → "JKJSTT1"
     const storeCode = extractCode(lastStore);
 
     rows.push({
       date:        lastDate,
       storeFull:   lastStore,
       storeCode,
-      salesNo:     rawSalesNo,
-      salesperson: rawSP,
+      salesNo:     lastSalesNo,
+      salesperson: lastSP,
       itemCode,
       itemName:    String(r[5] || '').trim(),
       qty,
