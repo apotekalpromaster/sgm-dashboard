@@ -184,24 +184,36 @@ export async function parseMKFile(file) {
 
   const rows  = [];
   let lastDate  = '';
-  let lastStore = '';  // "0001-JKJSTT1" — the raw store string
+  let lastStore = '';
 
   for (let i = hi + 1; i < raw.length; i++) {
     const r = raw[i];
+    if (!r) continue;
 
-    // Forward fill: carry over last non-empty Date / Store
-    if (String(r[0] || '').trim()) lastDate  = String(r[0]).trim();
-    if (String(r[1] || '').trim()) lastStore = String(r[1]).trim();
+    // ── STEP 1: Capture RAW cell values (before any forward fill) ─────────
+    const rawDate  = String(r[0] || '').trim();
+    const rawStore = String(r[1] || '').trim();
+    const rawSP    = String(r[3] || '').trim();
+    const rawSalesNo = String(r[2] || '').trim();
 
-    const store = lastStore;
+    // ── STEP 2: Filter SEBELUM forward fill (gunakan nilai raw asli) ───────
+    // Buang baris jika SALAH SATU kondisi ini terpenuhi:
+    //   a) kolom Date mengandung "Total" (case-insensitive)
+    //   b) kolom Store mengandung "Total"
+    //   c) kolom Sales Person mengandung "Total"
+    //   d) kolom Sales No kosong
+    const containsTotal = (s) => s.toLowerCase().includes('total');
+    if (containsTotal(rawDate) || containsTotal(rawStore) || containsTotal(rawSP)) continue;
+    if (!rawSalesNo) continue;
 
-    // Filter 1: discard subtotal rows (store contains "Total")
-    if (store.toLowerCase().includes('total')) continue;
+    // ── STEP 3: Forward fill (hanya untuk baris yang sudah lolos filter) ──
+    if (rawDate)  lastDate  = rawDate;
+    if (rawStore) lastStore = rawStore;
 
-    // Filter 2: discard rows without a SalesNo (not real transactions)
-    const salesNo = String(r[2] || '').trim();
-    if (!salesNo) continue;
+    // Jika setelah forward fill store masih kosong → skip (baris awal sebelum ada store)
+    if (!lastStore) continue;
 
+    // ── STEP 4: Extract remaining fields ──────────────────────────────────
     const itemCode = String(r[4] || '').trim();
     if (!itemCode) continue;
 
@@ -209,16 +221,16 @@ export async function parseMKFile(file) {
     const netSales = parseFloat(r[7]) || 0;
 
     // Extract short code: "0001-JKJSTT1" → "JKJSTT1"
-    const storeCode = extractCode(store);
+    const storeCode = extractCode(lastStore);
 
     rows.push({
-      date:      lastDate,
-      storeFull: store,
+      date:        lastDate,
+      storeFull:   lastStore,
       storeCode,
-      salesNo,
-      salesperson: String(r[3] || '').trim(),
+      salesNo:     rawSalesNo,
+      salesperson: rawSP,
       itemCode,
-      itemName:  String(r[5] || '').trim(),
+      itemName:    String(r[5] || '').trim(),
       qty,
       netSales,
     });

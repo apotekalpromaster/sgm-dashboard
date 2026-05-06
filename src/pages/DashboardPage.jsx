@@ -691,19 +691,51 @@ export default function DashboardPage({
   // Filter enrichedRows first, then re-aggregate from scratch.
   // filteredD is the SINGLE SOURCE OF TRUTH for every UI element.
   const filteredD = useMemo(() => {
-    // No raw rows (e.g. Supabase pull without enrichedRows) — fall back to pre-computed
-    if (!enrichedRows.length) return processed[activeComp] || null;
+    const base = processed[activeComp] || null;
 
-    // TAHAP 1: Filter raw rows by competition + global filters
+    // ── MK path: enrichedRows is empty for MK competitions ─────────────────
+    // MK data lives entirely in processed[activeComp].{storeLeader,spLeader,amLeader}
+    // Filter directly on those arrays using filterAM / filterTeam.
+    if (!enrichedRows.length) {
+      if (!base) return null;
+      if (!filterAM && !filterTeam) return base;
+
+      const amUp = filterAM   ? filterAM.trim().toUpperCase()   : '';
+      const tmUp = filterTeam ? filterTeam.trim().toUpperCase() : '';
+
+      const filterStore = (list) => (list || []).filter((s) => {
+        const okAM = !amUp || (s.am || '').trim().toUpperCase() === amUp;
+        return okAM;
+        // filterTeam not applicable to MK (no team data in MK source)
+      });
+      const filterAMList = (list) => (list || []).filter((a) => {
+        return !amUp || (a.name || '').trim().toUpperCase() === amUp;
+      });
+      const filterSP = (list) => (list || []).filter((s) => {
+        return !amUp || (s.am || '').trim().toUpperCase() === amUp;
+      });
+
+      const storeLeader = filterStore(base.storeLeader);
+      const spLeader    = filterSP(base.spLeader);
+      const amLeader    = filterAMList(base.amLeader);
+
+      return {
+        ...base,
+        storeLeader,
+        spLeader,
+        amLeader,
+        totalNS:  storeLeader.reduce((s, r) => s + r.ns,  0),
+        totalQty: storeLeader.reduce((s, r) => s + r.qty, 0),
+      };
+    }
+
+    // ── Standard path: re-aggregate from enrichedRows ──────────────────────
     let rows = enrichedRows.filter((r) => r.kompetisi === activeComp);
-    if (filterAM)   rows = rows.filter((r) => r.amName   === filterAM);
-    if (filterTeam) rows = rows.filter((r) => r.teamName === filterTeam);
+    if (filterAM)   rows = rows.filter((r) => r.amName.trim().toUpperCase()   === filterAM.trim().toUpperCase());
+    if (filterTeam) rows = rows.filter((r) => r.teamName.trim().toUpperCase() === filterTeam.trim().toUpperCase());
 
     if (!rows.length) return null;
 
-    // TAHAP 2: Re-aggregate from zero — all leaderboards + chart data
-    // ceName & team are now tagged on each enrichedRow, so aggregateOneCompetition
-    // builds ceLeaderboard from r.ceName directly — no external masterCE map needed.
     const cfg           = processed[activeComp]?.cfg || {};
     const storeCodesSet = new Set(rows.map((r) => r.storeCode).filter(Boolean));
     return aggregateOneCompetition(rows, {}, storeCodesSet, cfg);
