@@ -774,7 +774,17 @@ export function processTransactions(allTx, listProduk, masterAM, masterCE = {}) 
     const produk = listProduk[r.item];
     if (!produk) { skipped++; return; }
 
-    const master  = masterAM[r.storeCode] || {};
+    // Triple-fallback masterAM lookup — handles all spacing/format variants:
+    //   1. Exact short code (e.g. "JKJSTT1")
+    //   2. Space-stripped + uppercase (e.g. "0001-JKJSTT1" from "0001 - JKJSTT1")
+    //   3. Full storeRaw space-stripped (belt-and-suspenders)
+    const normalizedStoreCode = (r.storeCode || '').replace(/\s+/g, '').toUpperCase();
+    const normalizedStoreRaw  = (r.storeRaw  || '').replace(/\s+/g, '').toUpperCase();
+    const master = masterAM[r.storeCode]
+      || masterAM[normalizedStoreCode]
+      || masterAM[normalizedStoreRaw]
+      || {};
+
     const spKey   = (r.salesperson || '').trim().toUpperCase();
     const ceEntry = spCEMap[spKey] || {};
 
