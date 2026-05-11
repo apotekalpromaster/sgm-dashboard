@@ -532,6 +532,158 @@ function StoreTable({ rows, rules, mkMode = false, mkCfg = {} }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// BLACKMORES STORE TABLE
+// Threshold: BRONZE=8, SILVER=12, GOLD/PLAT/TITAN=20
+// Total mode: status berdasarkan qtyLactaWell, qty/ns tetap gabungan
+// Top-5 medali berdasarkan net sales tertinggi
+// ═══════════════════════════════════════════════════════════════
+function BMStoreTable({ rows, cfg, isTotalMode = false }) {
+  const TIERS = cfg?.tiers || { TITANIUM: 1, PLATINUM: 1, GOLD: 1, SILVER: 2, BRONZE: 3 };
+  const QTY_MIN = cfg?.qtyMin || { 1: 20, 2: 12, 3: 8 };
+  const topN = cfg?.bmTopN || 5;
+
+  // Sort by ns desc for consistent display
+  const sorted = [...(rows || [])].sort((a, b) => (b.ns ?? b.netSales ?? 0) - (a.ns ?? a.netSales ?? 0));
+
+  return (
+    <table className="data-table" style={{ width: '100%' }}>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama Toko</th>
+          <th>Tier</th>
+          <th>AM</th>
+          <th style={{ textAlign: 'right' }}>Qty</th>
+          {isTotalMode && <th style={{ textAlign: 'right' }}>Qty LW</th>}
+          <th style={{ textAlign: 'right' }}>Min</th>
+          <th style={{ textAlign: 'right' }}>Status</th>
+          <th style={{ textAlign: 'right' }}>Net Sales</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((row, i) => {
+          const tn      = TIERS[(row.category || '').toUpperCase()] || 0;
+          const qMin    = QTY_MIN[tn] || 0;
+          // Status: Total mode → threshold vs qtyLactaWell; Lacta mode → vs qty
+          const qCheck  = isTotalMode ? (row.qtyLactaWell ?? row.qty) : row.qty;
+          const qual    = !qMin || qCheck >= qMin;
+          const hasMedal = i < topN;
+          return (
+            <tr key={`bm-${row.code || i}-${i}`}>
+              <td>
+                {hasMedal
+                  ? <span className={`rank-badge ${getRankBadgeClass(i)}`}>{getRankEmoji(i)}</span>
+                  : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>#{i + 1}</span>
+                }
+              </td>
+              <td>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{row.name || row.storeName}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{row.code || row.storeCode}</div>
+              </td>
+              <td><span className={`tier-badge tier-${row.category}`}>{row.category || '—'}</span></td>
+              <td style={{ fontSize: 12 }}>{row.am || '—'}</td>
+              <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatNum(row.qty)}</td>
+              {isTotalMode && (
+                <td style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
+                  {formatNum(row.qtyLactaWell ?? 0)}
+                </td>
+              )}
+              <td style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>{qMin || '—'}</td>
+              <td style={{ textAlign: 'right' }}>
+                {qMin > 0 ? (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+                    background: qual ? '#dcfce7' : '#ffe4e6',
+                    color: qual ? '#15803d' : '#e11d48',
+                  }}>
+                    {qual ? '✓ OK' : `✗ min ${qMin}`}
+                  </span>
+                ) : '—'}
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(row.ns ?? row.netSales)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLACKMORES SP TABLE
+// Threshold per tier: BRONZE=3, SILVER=5, GOLD/PLAT/TITAN=8
+// Jika SP === AM: min 15 pcs
+// ═══════════════════════════════════════════════════════════════
+function BMSPTable({ rows, cfg }) {
+  const TIERS   = cfg?.tiers    || { TITANIUM: 1, PLATINUM: 1, GOLD: 1, SILVER: 2, BRONZE: 3 };
+  const SP_MIN  = cfg?.spQtyMin || { 1: 8, 2: 5, 3: 3 };
+  const SP_AM_MIN = cfg?.spAmMin ?? 15;
+
+  return (
+    <table className="data-table" style={{ width: '100%' }}>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Sales Person</th>
+          <th>Toko</th>
+          <th>Tier</th>
+          <th>Area Manager</th>
+          <th style={{ textAlign: 'right' }}>Qty</th>
+          <th style={{ textAlign: 'right' }}>Min</th>
+          <th style={{ textAlign: 'right' }}>Status</th>
+          <th style={{ textAlign: 'right' }}>Net Sales</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(rows || []).length === 0 ? (
+          <tr>
+            <td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+              Tidak ada data Sales Person
+            </td>
+          </tr>
+        ) : (
+          (rows || []).map((sp, i) => {
+            const tn    = TIERS[(sp.storeCat || sp.category || '').toUpperCase()] || 0;
+            const isAM  = sp.name && sp.am && sp.name.trim().toUpperCase() === sp.am.trim().toUpperCase();
+            const qMin  = isAM ? SP_AM_MIN : (SP_MIN[tn] || 0);
+            const qual  = !qMin || sp.qty >= qMin;
+            return (
+              <tr key={`bm-sp-${sp.name}-${i}`}>
+                <td><span className={`rank-badge ${getRankBadgeClass(i)}`}>{getRankEmoji(i)}</span></td>
+                <td style={{ fontWeight: 600, fontSize: 13 }}>
+                  {sp.name}
+                  {isAM && <span style={{ fontSize: 9, marginLeft: 5, padding: '1px 5px', borderRadius: 99, background: '#fef9c3', color: '#92400e' }}>AM</span>}
+                </td>
+                <td>
+                  <div style={{ fontSize: 12 }}>{sp.store || '—'}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{sp.storeCode || ''}</div>
+                </td>
+                <td><span className={`tier-badge tier-${sp.storeCat || sp.category || ''}`}>{sp.storeCat || sp.category || '—'}</span></td>
+                <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sp.am || '—'}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatNum(sp.qty)}</td>
+                <td style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>{qMin || '—'}</td>
+                <td style={{ textAlign: 'right' }}>
+                  {qMin > 0 ? (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+                      background: qual ? '#dcfce7' : '#ffe4e6',
+                      color: qual ? '#15803d' : '#e11d48',
+                    }}>
+                      {qual ? '✓ OK' : `✗ min ${qMin}`}
+                    </span>
+                  ) : '—'}
+                </td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(sp.ns)}</td>
+              </tr>
+            );
+          })
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SALES PERSON TABLE
 // ═══════════════════════════════════════════════════════════════
 function SPTable({ rows, showIncentive }) {
@@ -752,20 +904,32 @@ export default function DashboardPage({
 
   const rules = competitions[activeComp] || {};
 
-  // Detect MK mode — activeComp is one of the MK COMPETITION keys
+  // Detect MK mode
   const mkCfg  = rules.isMK ? rules : null;
   const mkMode = !!mkCfg;
+
+  // Detect BLACKMORES mode
+  const bmCfg     = rules.isBM  ? rules : null;
+  const bmMode    = !!bmCfg;
+  const bmTotal   = !!(bmCfg?.isBMTotal);
+  const bmLacta   = !!(bmCfg?.isBMLacta);
 
   // TAHAP 3: Compute all KPI metrics from D (filter-aware)
   // computeMetricsFromD reads totalNS/totalQty/storeLeader/amLeader directly from D
   // so every number on screen reflects the active filter.
   const m = useMemo(() => {
     if (!D) return null;
-    // Merge cfg from competitions catalog (has targets/periode) with D
     const cfg = competitions[activeComp] || {};
-    const DwithCfg = { ...D, cfg: { ...cfg, ...(D.cfg || {}) } };
+    // BM LACTA WELL: override targetQty = 750 untuk KPI Card
+    // BM TOTAL: override targetNetSales = 300jt untuk Progress Bar
+    const cfgOverride = bmLacta
+      ? { ...cfg, targetQty: 750, targetNetSales: 0 }
+      : bmTotal
+      ? { ...cfg, targetNetSales: 300_000_000, targetQty: null }
+      : cfg;
+    const DwithCfg = { ...D, cfg: { ...cfgOverride, ...(D.cfg || {}), ...cfgOverride } };
     return computeMetricsFromD(DwithCfg);
-  }, [D, activeComp, competitions]);
+  }, [D, activeComp, competitions, bmLacta, bmTotal]);
 
   // All AMs from storeLeader for filter dropdown
   const allAMs = useMemo(() => {
@@ -937,7 +1101,10 @@ export default function DashboardPage({
       {modal === 'store' && (
         <FullListModal title={`Semua Toko — ${rules.label || activeComp}`} onClose={() => setModal(null)}>
           <div style={{ padding: 4 }}>
-            <StoreTable rows={D?.storeLeader || []} rules={rules} mkMode={mkMode} mkCfg={mkCfg || {}} />
+            {bmMode
+              ? <BMStoreTable rows={D?.storeLeader || []} cfg={bmCfg || {}} isTotalMode={bmTotal} />
+              : <StoreTable rows={D?.storeLeader || []} rules={rules} mkMode={mkMode} mkCfg={mkCfg || {}} />
+            }
           </div>
         </FullListModal>
       )}
@@ -1126,10 +1293,13 @@ export default function DashboardPage({
               </div>
             </div>
             <div className="table-wrap">
-              <StoreTable rows={tableData.slice(0, 15)} rules={rules} mkMode={mkMode} mkCfg={mkCfg || {}} />
+              {bmMode
+                ? <BMStoreTable rows={tableData.slice(0, 15)} cfg={bmCfg || {}} isTotalMode={bmTotal} />
+                : <StoreTable rows={tableData.slice(0, 15)} rules={rules} mkMode={mkMode} mkCfg={mkCfg || {}} />
+              }
               {tableData.length > 15 && (
                 <div style={{ textAlign: 'center', padding: '10px 0 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                  +{tableData.length - 15} toko lainnya —{' '}
+                  +{tableData.length - 15} toko lainnya —{' '}
                   <button className="btn btn-ghost btn-sm" onClick={() => setModal('store')}>Lihat Semua</button>
                 </div>
               )}
@@ -1163,17 +1333,20 @@ export default function DashboardPage({
           <div className="card" style={{ marginBottom: 20 }}>
             <SectionHeader
               title="💪 Highlight Sales Person"
-              sub={`${spData.length} staf aktif · urut Net Sales · kode toko di-exclude otomatis`}
+              sub={`${spData.length} staf aktif · urut Net Sales${bmMode ? ' · threshold SP Blackmores aktif' : ' · kode toko di-exclude otomatis'}`}
               count={spData.length}
               onShowAll={spData.length > 10 ? () => setModal('sp') : null}
               onDownloadCSV={spData.length > 0 ? handleDlSP : null}
               showSticker
             />
             <div className="table-wrap">
-              <SPTable rows={spData.slice(0, 10)} showIncentive={hasIncentive} />
+              {(bmLacta || bmTotal)
+                ? <BMSPTable rows={spData.slice(0, 10)} cfg={bmCfg || {}} />
+                : <SPTable rows={spData.slice(0, 10)} showIncentive={hasIncentive} />
+              }
               {spData.length > 10 && (
                 <div style={{ textAlign: 'center', padding: '10px 0 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                  +{spData.length - 10} staf lainnya —{' '}
+                  +{spData.length - 10} staf lainnya —{' '}
                   <button className="btn btn-ghost btn-sm" onClick={() => setModal('sp')}>Lihat Semua</button>
                 </div>
               )}

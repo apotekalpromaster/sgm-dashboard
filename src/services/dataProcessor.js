@@ -12,15 +12,47 @@ import * as XLSX from 'xlsx';
 // incentivePerQty = Rp per unit (untuk model alat test)
 // incentiveItems  = item codes yang mendapat insentif
 export const COMPETITION_CFG = {
-  'BLACKMORES': {
-    label:          'Blackmores',
+  // ── BLACKMORES (3 sub-grup) ────────────────────────────────────────────
+  // Shared threshold: BRONZE=8, SILVER=12, GOLD/PLAT/TITAN=20 pcs
+  // SP threshold (per tier): BRONZE=3, SILVER=5, GOLD+=8, jika SP=AM → 15
+  'BLACKMORES (LACTA WELL)': {
+    label:          'Lacta Well',
     color:          '#0F6E56',
     periode:        '1 Apr–30 Jun 2026',
-    targetNetSales: 300_000_000,
-    targetQty:      750,
-    // qtyMin per tier number: tierN(TITANIUM/PLATINUM/GOLD)=1→20, SILVER=2→12, BRONZE=3→8
+    targetNetSales: 0,
+    targetQty:      750,          // KPI card target Qty
     tiers:          { TITANIUM: 1, PLATINUM: 1, GOLD: 1, SILVER: 2, BRONZE: 3 },
-    qtyMin:         { 1: 20, 2: 12, 3: 8 },
+    qtyMin:         { 1: 20, 2: 12, 3: 8 },   // store threshold per tier
+    spQtyMin:       { 1: 8,  2: 5,  3: 3  },   // SP threshold per tier
+    spAmMin:        15,                          // SP = AM → min 15
+    bmTopN:         5,
+    isBM:           true,
+    isBMLacta:      true,
+  },
+  'BLACKMORES (JOINT COMFORT)': {
+    label:          'Joint Comfort',
+    color:          '#0c5d49',
+    periode:        '1 Apr–30 Jun 2026',
+    targetNetSales: 0,
+    targetQty:      null,
+    tiers:          { TITANIUM: 1, PLATINUM: 1, GOLD: 1, SILVER: 2, BRONZE: 3 },
+    qtyMin:         {},            // Joint Comfort: no store threshold
+    isBM:           true,
+    isBMJoint:      true,
+  },
+  'BLACKMORES TOTAL': {
+    label:          'Total Sales Blackmores',
+    color:          '#064e3b',
+    periode:        '1 Apr–30 Jun 2026',
+    targetNetSales: 300_000_000,  // Progress Bar target
+    targetQty:      null,
+    tiers:          { TITANIUM: 1, PLATINUM: 1, GOLD: 1, SILVER: 2, BRONZE: 3 },
+    qtyMin:         { 1: 20, 2: 12, 3: 8 },   // store threshold → based on qtyLactaWell
+    spQtyMin:       { 1: 8,  2: 5,  3: 3  },
+    spAmMin:        15,
+    bmTopN:         5,
+    isBM:           true,
+    isBMTotal:      true,
   },
   'FAMILY DR (BODY SUPPORT)': {
     label:          'FamilyDr Body Support',
@@ -377,6 +409,80 @@ export function buildMKProcessed(mkRows, masterAM = {}) {
   return mkProcessed;
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+// BLACKMORES TOTAL — Virtual aggregate (Lacta Well + Joint Comfort)
+// Stores qtyLactaWell per-store for Status threshold check.
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Build "BLACKMORES TOTAL" by merging storeLeader from both sub-groups.
+ * Must be called AFTER processTransactions has built the two sub-keys.
+ *
+ * @param {Object} processed  — result.processed (contains LACTA WELL + JOINT COMFORT)
+ * @returns {Object}          — { 'BLACKMORES TOTAL': CompetitionData }
+ */
+export function buildBMTotalProcessed(processed) {
+  const lacta = processed['BLACKMORES (LACTA WELL)']  || { storeLeader: [], spLeader: [], amLeader: [] };
+  const joint = processed['BLACKMORES (JOINT COMFORT)'] || { storeLeader: [], spLeader: [], amLeader: [] };
+
+  // ── Merge storeLeader ─────────────────────────────────────────
+  const byStore = {};
+  const addStore = (r, isLacta) => {
+    const k = r.code || r.storeCode || r.name;
+    if (!byStore[k]) {
+      byStore[k] = {
+        code: r.code, name: r.name, category: r.category,
+        am: r.am, area: r.area, qty: 0, ns: 0, qtyLactaWell: 0,
+      };
+    }
+    byStore[k].qty += r.qty;
+    byStore[k].ns  += r.ns;
+    if (isLacta) byStore[k].qtyLactaWell += r.qty;
+  };
+  lacta.storeLeader.forEach((r) => addStore(r, true));
+  joint.storeLeader.forEach((r) => addStore(r, false));
+  const storeLeader = Object.values(byStore).sort((a, b) => b.ns - a.ns);
+
+  // ── Merge spLeader ────────────────────────────────────────────
+  const bySP = {};
+  const addSP = (r) => {
+    const k = (r.name || '').trim().toUpperCase();
+    if (!k) return;
+    if (!bySP[k]) bySP[k] = { ...r, qty: 0, ns: 0, qtyLacta: 0 };
+    bySP[k].qty += r.qty;
+    bySP[k].ns  += r.ns;
+  };
+  lacta.spLeader.forEach((r) => addSP(r));
+  joint.spLeader.forEach((r) => addSP(r));
+  const spLeader = Object.values(bySP).sort((a, b) => b.qty - a.qty);
+
+  // ── Merge amLeader ────────────────────────────────────────────
+  const byAM = {};
+  const addAM = (r) => {
+    const k = (r.name || '').trim().toUpperCase();
+    if (!k) return;
+    if (!byAM[k]) byAM[k] = { ...r, qty: 0, ns: 0 };
+    byAM[k].qty += r.qty;
+    byAM[k].ns  += r.ns;
+  };
+  lacta.amLeader.forEach(addAM);
+  joint.amLeader.forEach(addAM);
+  const amLeader = Object.values(byAM).sort((a, b) => b.ns - a.ns);
+
+  return {
+    'BLACKMORES TOTAL': {
+      cfg:           COMPETITION_CFG['BLACKMORES TOTAL'] || {},
+      totalNS:       storeLeader.reduce((s, r) => s + r.ns,  0),
+      totalQty:      storeLeader.reduce((s, r) => s + r.qty, 0),
+      storeLeader,
+      spLeader,
+      amLeader,
+      ceLeaderboard:  [],
+      itemBreakdown:  [],
+      incentiveTotal: 0,
+    },
+  };
+}
 
 // ── TIER NUMBER LOOKUP ─────────────────────────────────────────
 // Maps tier name → tier number used as qtyMin key

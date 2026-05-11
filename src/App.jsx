@@ -12,6 +12,7 @@ import {
   parseMasterCE,
   parseMKFile,
   buildMKProcessed,
+  buildBMTotalProcessed,
   processTransactions,
   aggregateOneCompetition,
   buildAggregated,
@@ -32,12 +33,12 @@ const ADMIN_PASSWORD = 'SGM2026';
 
 // ── Default list produk fallback ───────────────────────────────
 const DEFAULT_LIST_PRODUK = {
-  // BLACKMORES
-  '100008671': { itemName: 'Blackmores Vitamin C 500mg',   kompetisi: 'BLACKMORES' },
-  '100008672': { itemName: 'Blackmores Bio Calcium',        kompetisi: 'BLACKMORES' },
-  '100008673': { itemName: 'Blackmores Omega Women',        kompetisi: 'BLACKMORES' },
-  '100008674': { itemName: "Blackmores Men's Vitality",     kompetisi: 'BLACKMORES' },
-  '100008675': { itemName: 'Blackmores Probiotics Daily',   kompetisi: 'BLACKMORES' },
+  // BLACKMORES LACTA WELL (sub-group 1)
+  '100008671': { itemName: 'Blackmores LactaWell 1',      kompetisi: 'BLACKMORES (LACTA WELL)' },
+  '100008672': { itemName: 'Blackmores LactaWell 2',      kompetisi: 'BLACKMORES (LACTA WELL)' },
+  '100008673': { itemName: 'Blackmores LactaWell 3',      kompetisi: 'BLACKMORES (LACTA WELL)' },
+  '100008674': { itemName: 'Blackmores LactaWell 4',      kompetisi: 'BLACKMORES (LACTA WELL)' },
+  '100008675': { itemName: 'Blackmores LactaWell 5',      kompetisi: 'BLACKMORES (LACTA WELL)' },
   '100008676': { itemName: 'Blackmores Executive B',        kompetisi: 'BLACKMORES' },
   '100008677': { itemName: 'Blackmores Glucosamine',        kompetisi: 'BLACKMORES' },
   '100008678': { itemName: 'Blackmores Nature C',           kompetisi: 'BLACKMORES' },
@@ -102,10 +103,13 @@ export default function App() {
     if (!result?.processed) return null;
     const grouped = {};
 
+    // Ordering helper: BLACKMORES sub-tabs always in canonical order
+    const BM_ORDER = ['BLACKMORES (LACTA WELL)', 'BLACKMORES (JOINT COMFORT)', 'BLACKMORES TOTAL'];
+
     Object.entries(result.processed).forEach(([compKey, D]) => {
       const cfg = D?.cfg || {};
 
-      // MK COMPETITION: semua keys dengan isMK=true masuk ke grup 'MK COMPETITION'
+      // MK COMPETITION group
       if (cfg.isMK) {
         const G = 'MK COMPETITION';
         if (!grouped[G]) grouped[G] = [];
@@ -113,13 +117,29 @@ export default function App() {
         return;
       }
 
-      // Non-MK: gunakan cfg.group jika ada (dari parseListProduk GROUP DASHBOARD column)
+      // BLACKMORES group (isBM flag)
+      if (cfg.isBM) {
+        const G = 'BLACKMORES';
+        if (!grouped[G]) grouped[G] = [];
+        if (!grouped[G].includes(compKey)) grouped[G].push(compKey);
+        return;
+      }
+
+      // Non-MK non-BM: gunakan cfg.group dari parseListProduk GROUP column
       const groupLabel = cfg.group || null;
       if (groupLabel) {
-        if (!grouped[groupLabel]) grouped[groupLabel] = [];
+        if (!grouped[groupLabel]) grouped[groupLabel] = []
         if (!grouped[groupLabel].includes(compKey)) grouped[groupLabel].push(compKey);
       }
     });
+
+    // Sort BLACKMORES sub-tabs in canonical order
+    if (grouped['BLACKMORES']) {
+      grouped['BLACKMORES'].sort((a, b) => {
+        const ia = BM_ORDER.indexOf(a); const ib = BM_ORDER.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+    }
 
     return Object.keys(grouped).length ? grouped : null;
   }, [result]);
@@ -272,7 +292,22 @@ export default function App() {
         }
       }
 
-      const firstComp = Object.keys(res.processed)[0] || 'BLACKMORES';
+      // ── BLACKMORES TOTAL: virtual aggregate (non-fatal) ─────────────────
+      // Runs setelah processTransactions karena membaca result.processed.
+      // Selalu dibangun jika salah satu sub-grup ada (tidak butuh file terpisah).
+      if (
+        res.processed['BLACKMORES (LACTA WELL)'] ||
+        res.processed['BLACKMORES (JOINT COMFORT)']
+      ) {
+        try {
+          const bmTotal = buildBMTotalProcessed(res.processed);
+          Object.assign(res.processed, bmTotal);
+        } catch (bmErr) {
+          toast(`⚠️ BM Total warning: ${bmErr.message}`, 'error');
+        }
+      }
+
+      const firstComp = Object.keys(res.processed)[0] || 'BLACKMORES (LACTA WELL)';
 
       setResult(res);
       if (detectedPeriode) setPeriod(detectedPeriode);
