@@ -173,16 +173,24 @@ export default function UploadPage({
       {/* ── UPLOADED TX FILE LIST ── */}
       {uploadedFiles.length > 0 && (
         <div className="file-list" style={{ marginBottom: 20 }}>
-          {uploadedFiles.map((entry, i) => (
-            <div key={i} className="file-item">
-              <span className="file-icon">📄</span>
-              <span className="file-name">{entry.file?.name}</span>
-              <span className="file-size">
-                {entry.file ? `${(entry.file.size / 1024).toFixed(1)} KB` : ''}
-              </span>
-              <div className={`file-status-dot ${isProcessing && i === uploadedFiles.length - 1 ? 'processing' : 'ok'}`} />
-            </div>
-          ))}
+          {uploadedFiles.map((entry, i) => {
+            const sizeBytes = entry.file?.size || 0;
+            const sizeMB    = sizeBytes / (1024 * 1024);
+            const sizeLabel = sizeMB >= 1
+              ? `${sizeMB.toFixed(1)} MB`
+              : `${(sizeBytes / 1024).toFixed(1)} KB`;
+            const isLarge   = sizeMB >= 20;
+            return (
+              <div key={i} className="file-item">
+                <span className="file-icon">📄</span>
+                <span className="file-name">{entry.file?.name}</span>
+                <span className="file-size" style={{ color: isLarge ? '#d97706' : undefined }}>
+                  {sizeLabel}{isLarge ? ' ⚠️' : ''}
+                </span>
+                <div className={`file-status-dot ${isProcessing && i === uploadedFiles.length - 1 ? 'processing' : 'ok'}`} />
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -206,13 +214,20 @@ export default function UploadPage({
       {/* ── PROCESSING INDICATOR ── */}
       {isProcessing && (
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-          padding: 20, background: '#f0fdfa', borderRadius: 12, marginBottom: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
+          padding: '24px 20px', background: '#f0fdfa', borderRadius: 12, marginBottom: 20,
+          border: '1.5px solid #99f6e4',
         }}>
-          <div className="spinner dark" />
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--alpro-teal)' }}>
-            Join List Produk Kompetisi → Join Master AM → Agregasi per Kompetisi...
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="spinner dark" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--alpro-teal)' }}>
+              Memproses... (jangan tutup tab ini)
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: '#0d9488', textAlign: 'center', maxWidth: 420 }}>
+            Untuk file besar (70MB+), proses ini membutuhkan 30–60 detik.
+            Sistem sedang: Membaca Excel → Filter POS → Join Master AM → Agregasi per Kompetisi → Simpan ke Cloud.
+          </div>
         </div>
       )}
 

@@ -561,7 +561,14 @@ function BMStoreTable({ rows, cfg, isTotalMode = false }) {
         </tr>
       </thead>
       <tbody>
-        {sorted.map((row, i) => {
+        {sorted.length === 0 ? (
+          <tr>
+            <td colSpan={isTotalMode ? 9 : 8} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+              Tidak ada data toko (kolom kosong atau terfilter)
+            </td>
+          </tr>
+        ) : (
+          sorted.map((row, i) => {
           const tn      = TIERS[(row.category || '').toUpperCase()] || 0;
           const qMin    = QTY_MIN[tn] || 0;
           // Status: Total mode → threshold vs qtyLactaWell; Lacta mode → vs qty
@@ -603,7 +610,8 @@ function BMStoreTable({ rows, cfg, isTotalMode = false }) {
               <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(row.ns ?? row.netSales)}</td>
             </tr>
           );
-        })}
+        })
+        )}
       </tbody>
     </table>
   );
@@ -845,10 +853,13 @@ export default function DashboardPage({
   const filteredD = useMemo(() => {
     const base = processed[activeComp] || null;
 
-    // ── MK path: enrichedRows is empty for MK competitions ─────────────────
-    // MK data lives entirely in processed[activeComp].{storeLeader,spLeader,amLeader}
-    // Filter directly on those arrays using filterAM / filterTeam.
-    if (!enrichedRows.length) {
+    // Deteksi mode Virtual (BM Total) atau MK
+    const isMK = base?.cfg?.isMK;
+    const isVirtual = activeComp === 'BLACKMORES TOTAL';
+
+    // ── Virtual / MK path: Filter langsung dari array pre-aggregated ───────
+    // Digunakan untuk kompetisi yang tidak memiliki baris eksak di enrichedRows
+    if (isMK || isVirtual || !enrichedRows.length) {
       if (!base) return null;
       if (!filterAM && !filterTeam) return base;
 
@@ -858,7 +869,6 @@ export default function DashboardPage({
       const filterStore = (list) => (list || []).filter((s) => {
         const okAM = !amUp || (s.am || '').trim().toUpperCase() === amUp;
         return okAM;
-        // filterTeam not applicable to MK (no team data in MK source)
       });
       const filterAMList = (list) => (list || []).filter((a) => {
         return !amUp || (a.name || '').trim().toUpperCase() === amUp;

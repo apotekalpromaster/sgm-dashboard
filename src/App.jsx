@@ -316,19 +316,23 @@ export default function App() {
       setFilterAM('');
       setFilterTeam('');
 
-      // ── PUSH ke Supabase ──────────────────────────────────
+      // ── PUSH ke Supabase ──────────────────────────────────────────────────
+      // enrichedRows TIDAK dikirim ke Supabase — alasannya:
+      //   1. enrichedRows berisi puluhan ribu baris mentah → JSON >10MB → "Failed to fetch"
+      //   2. Setelah processTransactions, dashboard HANYA membaca `processed` (pre-aggregated)
+      //   3. Filter AM/Team di DashboardPage sudah handle BM Total & MK via direct array filter
       try {
-        toast('☁️ Menyimpan ke cloud...', 'info');
+        toast('☁️ Menyimpan ke cloud... (file besar, harap tunggu)', 'info');
         await pushDashboardData({
-          processed:    res.processed,
-          enrichedRows: res.enrichedRows,
-          availableAMs: res.availableAMs,
+          processed:      res.processed,
+          availableAMs:   res.availableAMs,
           availableTeams: res.availableTeams,
-          matched:    res.matched,
-          skipped:    res.skipped,
-          period:     detectedPeriode,
-          activeComp: firstComp,
-          savedAt:    new Date().toISOString(),
+          matched:        res.matched,
+          skipped:        res.skipped,
+          period:         detectedPeriode,
+          activeComp:     firstComp,
+          savedAt:        new Date().toISOString(),
+          // enrichedRows: intentionally omitted — too large for HTTP payload
         });
         toast('✅ Data tersimpan ke cloud!', 'success');
       } catch (pushErr) {
